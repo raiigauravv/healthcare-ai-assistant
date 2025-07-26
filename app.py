@@ -360,11 +360,10 @@ def create_demo_interface():
                     interactive=False
                 )
                 
-                confidence_output = gr.Slider(
+                confidence_output = gr.Number(
                     label="🎯 Confidence Score",
                     minimum=0,
                     maximum=1,
-                    step=0.01,
                     interactive=False,
                     show_label=True
                 )
@@ -500,5 +499,13 @@ def create_demo_interface():
 # Launch the interface
 if __name__ == "__main__":
     demo = create_demo_interface()
-    # For Hugging Face Spaces deployment (share=True not needed on HF Spaces)
-    demo.launch()
+    # Different launch configs for different environments
+    import os
+    is_hf_space = os.environ.get('SPACE_ID') is not None
+    
+    if is_hf_space:
+        # For Hugging Face Spaces - no share needed, server accessible
+        demo.launch(server_name="0.0.0.0", server_port=7860)
+    else:
+        # For local development
+        demo.launch(share=True)
