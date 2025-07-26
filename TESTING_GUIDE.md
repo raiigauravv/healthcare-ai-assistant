@@ -1,5 +1,13 @@
 # 🧪 Healthcare AI Agent Testing Guide
 
+## 🌐 **Live Demo Access**
+
+### **Hugging Face Space (Live)**: 
+🚀 **https://huggingface.co/spaces/gauravvraii/healthcare-ai-assistant**
+
+### **Local Development**:
+Use the commands below for local testing and development.
+
 ## Quick Test Commands
 
 ### 1. Run Individual Agent Tests (Automated)
