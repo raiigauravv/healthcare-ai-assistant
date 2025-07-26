@@ -1,3 +1,15 @@
+---
+title: Healthcare AI Assistant
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: "4.44.0"
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 🏥 Healthcare AI Assistant
 
 A sophisticated multimodal AI-powered healthcare assistant that provides preliminary health analysis based on text descriptions, medical images, and audio recordings. Built with OpenAI's latest models and deployed on Hugging Face Spaces.
@@ -15,225 +27,185 @@ A sophisticated multimodal AI-powered healthcare assistant that provides prelimi
 
 This is a **demonstration tool for educational purposes only**. It does not provide medical advice and should not be used as a substitute for professional medical consultation, diagnosis, or treatment. Always seek advice from qualified healthcare professionals.
 
-## 🎯 Features
+## �� Features
 
 ### 🔍 **Multimodal Analysis**
-- **Text Input**: Describe symptoms in natural language
-- **Image Analysis**: Upload medical photos (rashes, wounds, swelling, etc.)
-- **Audio Input**: Voice descriptions of symptoms using speech-to-text
-- **Audio-Only Mode**: Complete analysis from voice input alone
+- **Text Analysis**: Comprehensive symptom analysis from natural language descriptions
+- **Image Recognition**: Advanced dermatological and medical image analysis using GPT-4 Vision
+- **Audio Processing**: Symptom description via voice recordings with Whisper transcription
 
-### 👤 **Personalized Experience**
-- **Patient Information**: Name, age, and gender integration
-- **Personalized Responses**: AI addresses patients by name
-- **Demographics-Aware**: Age and gender-relevant medical insights
-- **Contextual Analysis**: Tailored recommendations based on patient profile
+### 🤖 **AI Specialist Agents**
+- **🚨 Triage Agent**: Initial assessment and urgency classification
+- **👩‍⚕️ Dermatology Agent**: Specialized skin condition analysis with image support
+- **🩺 General Practice Agent**: Comprehensive health analysis and recommendations
+- **💬 Follow-up Agent**: Interactive Q&A for clarifications and additional questions
 
-### 🤖 **Advanced AI Integration**
-- **GPT-4**: Comprehensive health analysis and recommendations
-- **GPT-4 Vision**: Medical image interpretation
-- **Whisper AI**: High-accuracy speech transcription
-- **Real-time Processing**: Instant analysis and feedback
+### 🔧 **Advanced Features**
+- **Smart Routing**: Automatically directs cases to appropriate specialist agents
+- **Urgency Classification**: Categorizes cases by medical priority (Low, Moderate, High, Urgent, Emergency)
+- **Multi-Agent Coordination**: Seamless collaboration between specialist AI agents
+- **Interactive Follow-up**: Comprehensive Q&A system for detailed consultations
+- **Visual Analysis**: Support for medical images, skin conditions, and diagnostic photos
 
-## 🛠️ Technology Stack
+## 🏗️ Architecture
 
-### **Frontend & UI**
-- **[Gradio 4.0+](https://gradio.app/)**: Modern web interface with healthcare theme
-- **HTML/CSS**: Custom styling for medical application aesthetics
-- **JavaScript**: Interactive elements and real-time updates
-
-### **Backend & AI**
-- **[Python 3.11+](https://python.org/)**: Core application language
-- **[OpenAI API v1.0+](https://openai.com/)**: Advanced AI models integration
-  - **GPT-4**: Text analysis and medical reasoning
-  - **GPT-4 Vision**: Medical image analysis
-  - **Whisper**: Speech-to-text transcription
-
-### **Data Processing**
-- **[PIL (Pillow)](https://pillow.readthedocs.io/)**: Image processing and format conversion
-- **[Librosa](https://librosa.org/)**: Audio processing and analysis
-- **[NumPy](https://numpy.org/)**: Numerical computing and array operations
-
-### **Deployment & Infrastructure**
-- **[Hugging Face Spaces](https://huggingface.co/spaces)**: Cloud deployment platform
-- **Git**: Version control and collaboration
-- **Virtual Environments**: Isolated Python environments
-
-## 🏗️ Architecture Overview
-
+### Core Components
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   User Input    │    │   Gradio UI      │    │  OpenAI APIs    │
-│                 │    │                  │    │                 │
-│ • Text          │───▶│ • Interface      │───▶│ • GPT-4         │
-│ • Image         │    │ • Validation     │    │ • GPT-4 Vision  │
-│ • Audio         │    │ • Processing     │    │ • Whisper       │
-│ • Demographics  │    │                  │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       ▼                       │
-         │              ┌──────────────────┐            │
-         │              │ Data Ingestion   │            │
-         │              │                  │            │
-         │              │ • Text Parser    │            │
-         └──────────────│ • Image Handler  │◀───────────┘
-                        │ • Audio Processor│
-                        │                  │
-                        └──────────────────┘
-                                 │
-                                 ▼
-                        ┌──────────────────┐
-                        │ AI Analysis &    │
-                        │ Response Gen.    │
-                        │                  │
-                        │ • Medical Insights│
-                        │ • Personalization│
-                        │ • Recommendations│
-                        └──────────────────┘
+├── 🎯 Agent Coordinator
+│   ├── 🚨 Triage Agent (Initial Assessment)
+│   ├── 👩‍⚕️ Dermatology Agent (Skin Analysis)
+│   ├── 🩺 General Practice Agent (Health Analysis)
+│   └── 💬 Follow-up Agent (Q&A Support)
+├── 🔍 Multimodal Processing
+│   ├── 📝 Text Ingestion & Preprocessing
+│   ├── 🖼️ Image Analysis (GPT-4 Vision)
+│   └── 🎵 Audio Transcription (Whisper)
+└── 🌐 Gradio Interface
+    ├── 📊 Analysis Dashboard
+    ├── 💬 Follow-up Chat
+    └── �� Results Display
 ```
 
-## 📁 Project Structure
+### AI Models Used
+- **GPT-4**: Primary analysis and agent reasoning
+- **GPT-4 Vision**: Medical image analysis and dermatological assessment
+- **Whisper**: Audio transcription for voice symptom descriptions
 
+## 🚀 Usage Guide
+
+### 1. **Basic Analysis**
+1. Enter patient information (name, age, gender)
+2. Describe symptoms in detail
+3. Optionally upload medical images
+4. Optionally record voice description
+5. Click "Analyze with AI Agents" for comprehensive assessment
+
+### 2. **Follow-up Questions**
+- Use the "Ask Follow-up Question" feature for additional clarifications
+- Get specialist advice from different AI agents
+- Receive detailed explanations and recommendations
+
+### 3. **Understanding Results**
+- **Urgency Level**: Medical priority classification
+- **Recommended Specialties**: Suggested medical specialties to consult
+- **Agent Analysis**: Detailed assessment from specialist AI agents
+- **Follow-up Recommendations**: Suggested next steps and precautions
+
+## 🔧 Technical Implementation
+
+### Dependencies
+```txt
+gradio>=4.0.0
+openai>=1.0.0
+python-dotenv
+Pillow
+numpy
+asyncio
 ```
-healthcare-ai-assistant/
-├── app.py                 # Main Gradio application
-├── requirements.txt       # Python dependencies
-├── .env.example          # Environment variables template
-├── .gitignore            # Git ignore rules
-├── LICENSE               # MIT License
-├── README.md             # This file
-└── src/
-    ├── openai_integration.py    # OpenAI API client
-    ├── ingestion.py            # Multimodal data processing
-    └── preprocess.py           # Data preprocessing utilities
-```
 
-## 🚀 Quick Start
+### Environment Setup
+- **OpenAI API Key**: Required for AI agent functionality
+- **Gradio Interface**: Web-based user interface
+- **Async Processing**: Multi-agent coordination and analysis
 
-### Prerequisites
-- Python 3.11 or higher
-- OpenAI API key
-- Git
+### Agent System
+The application uses a sophisticated multi-agent architecture:
 
-### Installation
+1. **Agent Coordinator**: Routes cases to appropriate specialists
+2. **Triage Agent**: Performs initial assessment and urgency classification
+3. **Specialist Agents**: Provide domain-specific analysis (dermatology, general practice)
+4. **Follow-up Agent**: Handles additional questions and clarifications
 
-1. **Clone the repository**
+## 📊 Capabilities
+
+### Medical Specialties Supported
+- **Dermatology**: Skin conditions, rashes, lesions, moles
+- **General Practice**: Common symptoms, general health concerns
+- **Emergency Assessment**: Urgency classification and triage
+- **Preventive Care**: Health recommendations and lifestyle advice
+
+### Input Modalities
+- **📝 Text**: Detailed symptom descriptions
+- **🖼️ Images**: Medical photos, skin conditions, diagnostic images
+- **�� Audio**: Voice recordings of symptom descriptions
+
+### Output Features
+- **📊 Structured Analysis**: Organized assessment reports
+- **🎯 Urgency Classification**: Medical priority levels
+- **📋 Specialist Recommendations**: Suggested medical specialties
+- **💬 Interactive Q&A**: Follow-up consultation capabilities
+
+## ⚠️ Important Notes
+
+### Medical Disclaimer
+- **Not a substitute for professional medical advice**
+- **For educational and demonstration purposes only**
+- **Always consult qualified healthcare professionals**
+- **In emergencies, contact emergency services immediately**
+
+### Privacy & Security
+- **No data storage**: Patient information is not permanently stored
+- **Secure processing**: All data processed in real-time
+- **API security**: OpenAI API calls use secure protocols
+
+### Limitations
+- **Demonstration tool**: Not for actual medical diagnosis
+- **AI limitations**: Subject to AI model constraints and biases
+- **No medical liability**: Tool provides informational analysis only
+
+## 🛠️ Development
+
+### Local Setup
 ```bash
-git clone https://github.com/raiigauravv/heathcare-ai-assistant.git
-cd heathcare-ai-assistant
-```
-
-2. **Create virtual environment**
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. **Install dependencies**
-```bash
+git clone https://huggingface.co/spaces/gauravvraii/healthcare-ai-assistant
+cd healthcare-ai-assistant
 pip install -r requirements.txt
-```
-
-4. **Set up environment variables**
-```bash
-cp .env.example .env
-# Edit .env and add your OpenAI API key
-```
-
-5. **Run the application**
-```bash
+export OPENAI_API_KEY="your-api-key"
 python app.py
 ```
 
-The application will be available at `http://localhost:7860`
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
+### File Structure
+```
+├── app.py                 # Main Gradio application
+├── src/
+│   ├── agents.py         # AI specialist agent system
+│   ├── openai_integration.py  # OpenAI API integration
+│   ├── ingestion.py      # Multimodal data processing
+│   └── preprocess.py     # Data preprocessing utilities
+├── requirements.txt      # Python dependencies
+├── .env.example         # Environment variables template
+└── README.md            # This documentation
 ```
 
-### Supported File Formats
+## 📈 Future Enhancements
 
-- **Images**: JPG, JPEG, PNG, BMP, TIFF, WEBP
-- **Audio**: MP3, WAV, M4A, FLAC, OGG
+### Planned Features
+- **🔬 Additional Specialties**: Cardiology, Neurology, Pediatrics
+- **📱 Mobile Optimization**: Enhanced mobile interface
+- **🌍 Multi-language Support**: International language support
+- **📊 Analytics Dashboard**: Usage statistics and insights
+- **🔗 API Integration**: Healthcare system integrations
 
-## 📝 Usage Examples
+### Technical Improvements
+- **⚡ Performance Optimization**: Faster response times
+- **🔐 Enhanced Security**: Additional privacy protections
+- **📝 Detailed Logging**: Comprehensive audit trails
+- **🎯 Accuracy Improvements**: Enhanced AI model fine-tuning
 
-### 1. Text-Only Analysis
-```
-Patient: "John Doe"
-Age: "25"
-Gender: "Male"
-Symptoms: "I have been experiencing severe headaches for the past 3 days, along with sensitivity to light and nausea."
-```
+## 📞 Support & Contact
 
-### 2. Image + Text Analysis
-```
-Patient: "Jane Smith"
-Age: "35"
-Gender: "Female"
-Symptoms: "Strange rash appeared on my arm yesterday"
-Image: [Upload photo of rash]
-```
+### Issues & Bug Reports
+- **GitHub Issues**: Report bugs and feature requests
+- **Documentation**: Comprehensive usage guides
+- **Community Support**: User community discussions
 
-### 3. Audio-Only Analysis
-```
-Patient: "Mike Johnson"
-Age: "45"
-Gender: "Male"
-Audio: [Record voice describing symptoms]
-```
-
-## 🔒 Privacy & Security
-
-- **No Data Storage**: Patient information is not stored permanently
-- **Secure API Calls**: All communications encrypted via HTTPS
-- **Environment Variables**: Sensitive keys stored securely
-- **Open Source**: Full transparency of code and processes
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🩺 Medical Disclaimer
-
-**IMPORTANT**: This application is for educational and demonstration purposes only. It:
-
-- ❌ Does NOT provide medical diagnosis
-- ❌ Does NOT replace professional medical advice
-- ❌ Should NOT be used for emergency medical situations
-- ✅ Provides general health information only
-- ✅ Encourages consultation with healthcare professionals
-
-**In case of medical emergency, contact emergency services immediately.**
-
-## 🙏 Acknowledgments
-
-- **OpenAI** for providing advanced AI models
-- **Hugging Face** for the deployment platform
-- **Gradio** for the excellent UI framework
-- **Python Community** for the amazing libraries
-
-## 📞 Support
-
-For questions, issues, or suggestions:
-
-- **GitHub Issues**: [Create an issue](https://github.com/raiigauravv/heathcare-ai-assistant/issues)
-- **Live Demo**: [Try it out](https://huggingface.co/spaces/gauravvraii/healthcare-ai-assistant)
+### Development Team
+- **Lead Developer**: [gauravvraii](https://huggingface.co/gauravvraii)
+- **AI Specialist**: Healthcare AI system design
+- **Technical Architecture**: Multi-agent system implementation
 
 ---
 
-**⭐ If you find this project helpful, please consider giving it a star on GitHub!**
+**🏥 Healthcare AI Assistant** - Advancing healthcare accessibility through AI technology
+
+*Built with ❤️ using OpenAI GPT-4, Gradio, and Hugging Face Spaces*
