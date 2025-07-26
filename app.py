@@ -155,18 +155,18 @@ def multimodal_predict(text_symptoms: str, medical_image=None, audio_file=None, 
     return predict_health_issue(text_symptoms, patient_age, patient_gender, patient_name, medical_image, audio_file)
 
 
-def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str, patient_name: str, chat_history: list) -> tuple:
+def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str, patient_name: str, chat_history: list, current_history: str) -> tuple:
     """
-    Handle follow-up questions about the medical analysis in chatbot format
+    Handle follow-up questions about the medical analysis in simple text format
     """
     try:
         if not question or not question.strip():
-            return chat_history, ""
+            return current_history, "", chat_history
         
         if not original_analysis or "Error" in original_analysis:
             error_msg = "Please complete a health analysis first before asking follow-up questions."
-            chat_history.append((question, error_msg))
-            return chat_history, ""
+            new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+            return new_history, "", chat_history
         
         # Prepare patient data for follow-up
         patient_data = {
@@ -189,13 +189,16 @@ def handle_followup_question(question: str, original_analysis: str, patient_age:
         # Add to chat history
         chat_history.append((question, response))
         
-        return chat_history, ""
+        # Update display history
+        new_history = current_history + f"\n\n👤 You: {question}\n\n🤖 Agent: {response}"
+        
+        return new_history, "", chat_history
         
     except Exception as e:
         logger.error(f"Follow-up question error: {e}")
         error_msg = f"Sorry, I encountered an error processing your question: {str(e)}"
-        chat_history.append((question, error_msg))
-        return chat_history, ""
+        new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+        return new_history, "", chat_history
 
 def create_demo_interface():
     """Create and configure the Gradio interface"""
@@ -333,19 +336,19 @@ def create_demo_interface():
                 </div>
                 """)
         
-        # Follow-up Questions Section - Chatbot Style
+        # Follow-up Questions Section - Simple Chat Style
         with gr.Row():
             with gr.Column():
-                gr.Markdown("## 💬 Chat with Healthcare Agent")
-                gr.Markdown("*Continue the conversation with our AI healthcare agent for personalized follow-up questions.*")
+                gr.Markdown("## 💬 Follow-up Questions")
+                gr.Markdown("*Ask follow-up questions about your health analysis for additional guidance.*")
                 
-                # Chatbot interface
-                chatbot = gr.Chatbot(
-                    label="Healthcare Agent Chat",
-                    height=400,
-                    show_label=True,
-                    avatar_images=("👤", "🤖"),
-                    type="tuples"
+                # Simple chat interface
+                followup_history = gr.Textbox(
+                    label="Conversation History",
+                    lines=8,
+                    max_lines=12,
+                    interactive=False,
+                    placeholder="Your conversation with the healthcare agent will appear here..."
                 )
                 
                 with gr.Row():
@@ -413,26 +416,26 @@ def create_demo_interface():
             outputs=[analysis_state]
         )
         
-        # Connect follow-up question handler (chatbot style)
+        # Connect follow-up question handler (simple text style)
         followup_btn.click(
             fn=handle_followup_question,
-            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history],
-            outputs=[chatbot, followup_question],
+            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
+            outputs=[followup_history, followup_question, chat_history],
             show_progress=True
         )
         
-        # Enter key support for chatbot
+        # Enter key support for followup
         followup_question.submit(
             fn=handle_followup_question,
-            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history],
-            outputs=[chatbot, followup_question],
+            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
+            outputs=[followup_history, followup_question, chat_history],
             show_progress=True
         )
         
         # Clear chat functionality
         clear_chat_btn.click(
-            fn=lambda: ([], []),
-            outputs=[chatbot, chat_history]
+            fn=lambda: ("", []),
+            outputs=[followup_history, chat_history]
         )
         
         # Footer
@@ -452,4 +455,4 @@ def create_demo_interface():
 if __name__ == "__main__":
     demo = create_demo_interface()
     # For Hugging Face Spaces deployment
-    demo.launch()
+    demo.launch(share=True)
