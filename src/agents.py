@@ -94,16 +94,25 @@ class TriageAgent(BaseHealthcareAgent):
         """Specialized triage analysis with urgency assessment"""
         result = await super().analyze(patient_data)
         
-        # Extract urgency level from the analysis (simple keyword matching)
+        # Extract urgency level from the analysis with improved logic
         analysis_text = result.get("analysis", "").lower()
-        if "emergency" in analysis_text or "911" in analysis_text:
+        
+        # Priority-based urgency detection (most severe first)
+        if any(keyword in analysis_text for keyword in ["emergency", "911", "call 911", "immediate", "life-threatening"]):
             urgency = "EMERGENCY"
-        elif "urgent" in analysis_text and "non-urgent" not in analysis_text:
-            urgency = "URGENT"
-        elif "semi-urgent" in analysis_text:
+        elif any(keyword in analysis_text for keyword in ["semi-urgent", "semi urgent"]):
             urgency = "SEMI-URGENT"
-        else:
+        elif "urgent" in analysis_text and "non-urgent" not in analysis_text and "semi-urgent" not in analysis_text:
+            urgency = "URGENT"
+        elif "non-urgent" in analysis_text:
             urgency = "NON-URGENT"
+        else:
+            # Default based on symptom severity keywords
+            severe_keywords = ["severe", "intense", "difficulty breathing", "chest pain", "bleeding"]
+            if any(keyword in analysis_text for keyword in severe_keywords):
+                urgency = "URGENT"
+            else:
+                urgency = "SEMI-URGENT"  # Conservative default for unclear cases
         
         result["urgency"] = urgency
         result["specialties_recommended"] = self._extract_specialties(analysis_text)
