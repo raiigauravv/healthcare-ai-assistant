@@ -189,7 +189,7 @@ def multimodal_predict(text_symptoms: str, medical_image=None, audio_file=None, 
 
 def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str, patient_name: str, chat_history: list, current_history: str) -> tuple:
     """
-    Handle follow-up questions about the medical analysis in simple text format
+    Handle follow-up questions about the medical analysis with fast, chatbot-like responses
     """
     try:
         if not question or not question.strip():
@@ -197,13 +197,13 @@ def handle_followup_question(question: str, original_analysis: str, patient_age:
         
         # Check if API key is available
         if API_KEY_MISSING or not INITIALIZATION_SUCCESS:
-            error_msg = "⚠️ OpenAI API key not configured. Please configure the API key first."
-            new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+            error_msg = "⚠️ **System**: OpenAI API key not configured. Please set up your API key in HF Spaces settings first."
+            new_history = current_history + f"\n\n👤 **You**: {question}\n🤖 **Follow-up Agent**: {error_msg}"
             return new_history, "", chat_history
         
         if not original_analysis or "Error" in original_analysis:
             error_msg = "Please complete a health analysis first before asking follow-up questions."
-            new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+            new_history = current_history + f"\n\n👤 **You**: {question}\n🤖 **Follow-up Agent**: {error_msg}"
             return new_history, "", chat_history
         
         # Prepare patient data for follow-up
@@ -214,28 +214,32 @@ def handle_followup_question(question: str, original_analysis: str, patient_age:
             "symptoms": "Previous analysis completed"
         }
         
-        # Use the follow-up agent
+        # Use the follow-up agent with clear identification
         response = asyncio.run(
             agent_coordinator.handle_followup_question(original_analysis, question, patient_data)
         )
         
-        # Clean up the response to remove placeholder names and make it more conversational
-        response = response.replace("[Your Name]", "Healthcare AI Assistant")
+        # Clean up and format the response with agent identification
+        response = response.replace("[Your Name]", "Follow-up Agent")
         response = response.replace("Dear " + patient_data["name"] + ",", f"Hello {patient_data['name']},")
-        response = response.replace("Best,\n[Your Name]", "Hope this helps!\n\n- Your Healthcare AI Assistant 🤖")
+        response = response.replace("Best,\n[Your Name]", "Hope this helps! 💙")
+        
+        # Add agent identification and ensure consistency
+        if not response.startswith("Hello") and not "Hello" in response:
+            response = f"Hello {patient_data['name']},\n\n{response}"
         
         # Add to chat history
         chat_history.append((question, response))
         
-        # Update display history
-        new_history = current_history + f"\n\n👤 You: {question}\n\n🤖 Agent: {response}"
+        # Update display history with clear agent identification
+        new_history = current_history + f"\n\n👤 **You**: {question}\n\n🤖 **Follow-up Agent**: {response}\n\n---"
         
         return new_history, "", chat_history
         
     except Exception as e:
         logger.error(f"Follow-up question error: {e}")
-        error_msg = f"Sorry, I encountered an error processing your question: {str(e)}"
-        new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+        error_msg = f"I encountered an error: {str(e)}. Please try again or rephrase your question."
+        new_history = current_history + f"\n\n👤 **You**: {question}\n🤖 **Follow-up Agent**: {error_msg}"
         return new_history, "", chat_history
 
 def create_demo_interface():
@@ -372,34 +376,35 @@ def create_demo_interface():
                 gr.HTML(f"""
                 <div style="margin-top: 20px; padding: 15px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <strong>🤖 Powered by:</strong> OpenAI GPT-4, CLIP, and Whisper models<br>
-                    <strong>🧠 AI Agents:</strong> Triage, Dermatology, General Practice, Follow-up<br>
+                    <strong>🧠 AI Agents:</strong> Triage → Dermatology → General Practice → Follow-up<br>
+                    <strong>📋 Analysis Process:</strong> Multiple specialist agents collaborate on your case<br>
                     <strong>⚡ Status:</strong> <span style="color: {status_color}; font-weight: bold;">{status_text}</span>
                 </div>
                 """)
         
-        # Follow-up Questions Section - Simple Chat Style
+        # Follow-up Questions Section - Enhanced Chat Style
         with gr.Row():
             with gr.Column():
                 gr.Markdown("## 💬 Follow-up Questions")
-                gr.Markdown("*Ask follow-up questions about your health analysis for additional guidance.*")
+                gr.Markdown("*Ask follow-up questions about your health analysis. The **Follow-up Agent** specializes in continuing your healthcare conversation.*")
                 
-                # Simple chat interface
+                # Simple chat interface with enhanced formatting
                 followup_history = gr.Textbox(
-                    label="Conversation History",
+                    label="💬 Conversation with Follow-up Agent",
                     lines=8,
                     max_lines=12,
                     interactive=False,
-                    placeholder="Your conversation with the healthcare agent will appear here..."
+                    placeholder="Your chat conversation will appear here...\n\n🤖 Follow-up Agent is ready to answer your questions!"
                 )
                 
                 with gr.Row():
                     followup_question = gr.Textbox(
                         label="",
-                        placeholder="Ask me anything about your health analysis...",
+                        placeholder="Type your question here... (e.g., 'What can I apply on my face?')",
                         lines=1,
                         scale=4
                     )
-                    followup_btn = gr.Button("Send", variant="primary", scale=1)
+                    followup_btn = gr.Button("💬 Send", variant="primary", scale=1)
                 
                 # Clear chat button
                 clear_chat_btn = gr.Button("🗑️ Clear Chat", variant="secondary", size="sm")
@@ -457,20 +462,20 @@ def create_demo_interface():
             outputs=[analysis_state]
         )
         
-        # Connect follow-up question handler (simple text style)
+        # Connect follow-up question handler (optimized for speed)
         followup_btn.click(
             fn=handle_followup_question,
             inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
             outputs=[followup_history, followup_question, chat_history],
-            show_progress=True
+            show_progress="minimal"  # Reduced progress indication for speed
         )
         
-        # Enter key support for followup
+        # Enter key support for followup (optimized)
         followup_question.submit(
             fn=handle_followup_question,
             inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
             outputs=[followup_history, followup_question, chat_history],
-            show_progress=True
+            show_progress="minimal"  # Reduced progress indication for speed
         )
         
         # Clear chat functionality
