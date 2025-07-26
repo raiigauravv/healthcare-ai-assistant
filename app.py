@@ -467,7 +467,7 @@ def create_demo_interface():
             fn=handle_followup_question,
             inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
             outputs=[followup_history, followup_question, chat_history],
-            show_progress="minimal"  # Reduced progress indication for speed
+            show_progress=True
         )
         
         # Enter key support for followup (optimized)
@@ -475,7 +475,7 @@ def create_demo_interface():
             fn=handle_followup_question,
             inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history, followup_history],
             outputs=[followup_history, followup_question, chat_history],
-            show_progress="minimal"  # Reduced progress indication for speed
+            show_progress=True
         )
         
         # Clear chat functionality
@@ -500,5 +500,5 @@ def create_demo_interface():
 # Launch the interface
 if __name__ == "__main__":
     demo = create_demo_interface()
-    # For Hugging Face Spaces deployment
-    demo.launch(share=True)
+    # For Hugging Face Spaces deployment (share=True not needed on HF Spaces)
+    demo.launch()
