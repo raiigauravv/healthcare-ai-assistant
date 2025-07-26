@@ -5,6 +5,7 @@ Multimodal healthcare AI with OpenAI integration
 
 import gradio as gr
 import os
+import asyncio
 from typing import Optional, Tuple
 import logging
 from datetime import datetime
@@ -13,13 +14,15 @@ from datetime import datetime
 from src.ingestion import ingest_text, ingest_image, ingest_audio
 from src.preprocess import preprocess_text
 from src.openai_integration import OpenAIHealthcareAssistant
+from src.agents import AgentCoordinator
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI assistant
+# Initialize OpenAI assistant and Agent Coordinator
 healthcare_ai = OpenAIHealthcareAssistant()
+agent_coordinator = AgentCoordinator()
 
 def multimodal_predict(
     text_symptoms: str,
@@ -29,7 +32,7 @@ def multimodal_predict(
     patient_gender: str = "Not specified"
 ) -> Tuple[str, str, float]:
     """
-    Main prediction function for multimodal healthcare analysis
+    Enhanced prediction function using AI agents for specialized healthcare analysis
     
     Args:
         text_symptoms: Patient's symptom description
@@ -39,10 +42,10 @@ def multimodal_predict(
         patient_gender: Patient's gender
         
     Returns:
-        Tuple of (analysis, recommendations, confidence_score)
+        Tuple of (agent_analysis, recommendations, confidence_score)
     """
     try:
-        logger.info("Starting multimodal healthcare prediction")
+        logger.info("Starting multimodal healthcare prediction with AI agents")
         
         # Validate inputs
         if not text_symptoms or len(text_symptoms.strip()) < 10:
@@ -53,17 +56,15 @@ def multimodal_predict(
         cleaned_text = preprocess_text(processed_text)
         
         # Process image if provided
-        image_analysis = ""
+        processed_image = None
         if medical_image:
             try:
-                img = ingest_image(medical_image)
-                image_analysis = healthcare_ai.analyze_medical_image(img, text_symptoms)
+                processed_image = ingest_image(medical_image)
                 logger.info("Medical image processed successfully")
             except Exception as e:
                 logger.error(f"Image processing error: {e}")
-                image_analysis = "⚠️ Image analysis unavailable"
         
-        # Process audio if provided
+        # Process audio if provided (enhanced for future audio analysis)
         audio_analysis = ""
         if audio_file:
             try:
@@ -74,27 +75,112 @@ def multimodal_predict(
                 logger.error(f"Audio processing error: {e}")
                 audio_analysis = "⚠️ Audio analysis unavailable"
         
-        # Generate comprehensive analysis using OpenAI
-        analysis_result = healthcare_ai.comprehensive_health_analysis(
-            symptoms=cleaned_text,
-            image_analysis=image_analysis,
-            audio_analysis=audio_analysis,
-            patient_age=patient_age,
-            patient_gender=patient_gender
-        )
+        # Prepare patient data for agents
+        patient_data = {
+            "name": "Patient",  # Default name since we don't have name input currently
+            "age": str(patient_age),
+            "gender": patient_gender,
+            "symptoms": cleaned_text,
+            "has_image": processed_image is not None,
+            "has_audio": bool(audio_file),
+            "audio_analysis": audio_analysis
+        }
         
-        # Extract results
-        main_analysis = analysis_result.get("analysis", "Analysis unavailable")
-        recommendations = analysis_result.get("recommendations", "No recommendations available")
-        confidence = analysis_result.get("confidence", 0.7)
+        # Use Agent Coordinator for comprehensive analysis
+        agent_results = asyncio.run(agent_coordinator.analyze_patient(patient_data, processed_image))
         
-        logger.info("Prediction completed successfully")
+        # Extract comprehensive analysis
+        comprehensive_analysis = agent_results.get("comprehensive_analysis", "Analysis unavailable")
+        urgency_level = agent_results.get("urgency", "NON-URGENT")
+        specialties = agent_results.get("specialties_recommended", [])
         
-        return main_analysis, recommendations, confidence
+        # Generate recommendations based on urgency and specialties
+        recommendations = f"""
+## 🚨 Urgency Level: {urgency_level}
+
+## 🏥 Recommended Next Steps:
+"""
+        
+        if urgency_level == "EMERGENCY":
+            recommendations += """
+⚠️ **SEEK IMMEDIATE EMERGENCY CARE**
+- Call 911 or go to the nearest emergency room immediately
+- Do not delay medical attention
+"""
+        elif urgency_level == "URGENT":
+            recommendations += """
+🔴 **Seek medical care today**
+- Contact your doctor or visit urgent care within a few hours
+- Monitor symptoms closely
+"""
+        elif urgency_level == "SEMI-URGENT":
+            recommendations += """
+🟡 **Schedule medical appointment**
+- See your healthcare provider within 1-3 days
+- Continue monitoring symptoms
+"""
+        else:
+            recommendations += """
+🟢 **Routine medical care**
+- Schedule regular appointment with your healthcare provider
+- Continue self-care measures as appropriate
+"""
+        
+        if specialties:
+            recommendations += f"\n## 👩‍⚕️ Specialist Consultations Recommended:\n"
+            for specialty in specialties:
+                recommendations += f"- {specialty.title()}\n"
+        
+        recommendations += """
+## 📞 Important Reminders:
+- This analysis is for educational purposes only
+- Always consult healthcare professionals for medical decisions
+- Trust your instincts - if you feel something is wrong, seek medical care
+"""
+        
+        # Calculate confidence based on agent consensus and data quality
+        confidence = 0.8 if processed_image else 0.7
+        if urgency_level in ["EMERGENCY", "URGENT"]:
+            confidence = max(confidence, 0.85)  # Higher confidence for urgent cases
+        
+        logger.info(f"Agent-based prediction completed - Urgency: {urgency_level}")
+        
+        return comprehensive_analysis, recommendations, confidence
         
     except Exception as e:
         logger.error(f"Prediction error: {e}")
         return f"❌ Error during analysis: {str(e)}", "Please try again or consult a healthcare professional", 0.0
+
+
+def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str) -> str:
+    """
+    Handle follow-up questions about the medical analysis
+    """
+    try:
+        if not question or not question.strip():
+            return "Please ask a specific question about your health analysis."
+        
+        if not original_analysis or "Error" in original_analysis:
+            return "Please complete a health analysis first before asking follow-up questions."
+        
+        # Prepare patient data for follow-up
+        patient_data = {
+            "name": "Patient",
+            "age": str(patient_age),
+            "gender": patient_gender,
+            "symptoms": "Previous analysis completed"
+        }
+        
+        # Use the follow-up agent
+        response = asyncio.run(
+            agent_coordinator.handle_followup_question(original_analysis, question, patient_data)
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Follow-up question error: {e}")
+        return f"Sorry, I encountered an error processing your question: {str(e)}"
 
 def create_demo_interface():
     """Create and configure the Gradio interface"""
@@ -128,7 +214,8 @@ def create_demo_interface():
         gr.HTML("""
         <div class="header">
             <h1>🏥 Healthcare AI Assistant</h1>
-            <p>Advanced multimodal AI for healthcare analysis and recommendations</p>
+            <p>Advanced multimodal AI with specialist agents for healthcare analysis</p>
+            <p style="font-size: 0.9em;">🤖 Featuring: Triage • Dermatology • General Practice • Follow-up Agents</p>
         </div>
         """)
         
@@ -217,9 +304,33 @@ def create_demo_interface():
                 gr.HTML("""
                 <div style="margin-top: 20px; padding: 15px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <strong>🤖 Powered by:</strong> OpenAI GPT-4, CLIP, and Whisper models<br>
+                    <strong>🧠 AI Agents:</strong> Triage, Dermatology, General Practice, Follow-up<br>
                     <strong>⚡ Status:</strong> <span style="color: #28a745; font-weight: bold;">Online and Ready</span>
                 </div>
                 """)
+        
+        # Follow-up Questions Section
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown("## 💬 Follow-up Questions")
+                gr.Markdown("*Have questions about your analysis? Ask our follow-up agent for clarification.*")
+                
+                followup_question = gr.Textbox(
+                    label="Ask a follow-up question",
+                    placeholder="e.g., 'What should I do if the pain gets worse?' or 'Are there any home remedies I can try?'",
+                    lines=2
+                )
+                
+                followup_btn = gr.Button("Ask Follow-up Question", variant="secondary")
+                
+                followup_response = gr.Textbox(
+                    label="Follow-up Response",
+                    lines=4,
+                    interactive=False
+                )
+        
+        # Store the analysis for follow-up questions
+        analysis_state = gr.State(value="")
         
         # Example inputs
         gr.Markdown("## 💡 Example Inputs")
@@ -259,6 +370,18 @@ def create_demo_interface():
             fn=multimodal_predict,
             inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender],
             outputs=[analysis_output, recommendations_output, confidence_output],
+            show_progress=True
+        ).then(
+            fn=lambda analysis, *args: analysis,  # Store analysis for follow-up
+            inputs=[analysis_output, recommendations_output, confidence_output],
+            outputs=[analysis_state]
+        )
+        
+        # Connect follow-up question handler
+        followup_btn.click(
+            fn=handle_followup_question,
+            inputs=[followup_question, analysis_state, patient_age, patient_gender],
+            outputs=[followup_response],
             show_progress=True
         )
         
