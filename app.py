@@ -370,34 +370,34 @@ def create_demo_interface():
         # Example cases
         examples = [
             [
+                "Sarah Johnson",
                 "I have severe chest pain, difficulty breathing, and I'm sweating. This started 30 minutes ago.",
-                None,
-                None,
                 45,
                 "Female",
-                "Sarah Johnson"
+                None,
+                None
             ],
             [
+                "Mike Smith",
                 "I've had a persistent cough for 3 weeks with yellow-green phlegm, fever, and difficulty breathing. I'm also feeling very tired.",
-                None,
-                None,
                 45,
                 "Male",
-                "Mike Smith"
+                None,
+                None
             ],
             [
+                "Alex Taylor",
                 "I noticed a small, dark mole on my arm that has changed color and size over the past month. It's also slightly raised and sometimes itches.",
-                None,
-                None,
                 35,
                 "Other",
-                "Alex Taylor"
+                None,
+                None
             ]
         ]
         
         gr.Examples(
             examples=examples,
-            inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender, patient_name],
+            inputs=[patient_name, text_symptoms, patient_age, patient_gender, medical_image, audio_file],
             label="Click on an example to try it out"
         )
         
