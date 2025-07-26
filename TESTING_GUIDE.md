@@ -31,7 +31,7 @@ PYTHONPATH=. /Users/gauravvraii/AA_LAST_SEM/CareerBot/healthcare_ai_assistant/ve
 **Note**: The app now features:
 - 🔢 **Number input for age** (instead of slider)
 - 🤖 **"Analyze with Agents" button** (updated from "Analyze Health Data")
-- 💬 **Interactive chatbot** for follow-up questions with conversation history
+- 💬 **Simple text-based follow-up** with conversation history (stable across all platforms)
 - 👤 **Patient name field** that personalizes all interactions
 
 ### 🚨 **TRIAGE AGENT Testing**
@@ -130,26 +130,23 @@ PYTHONPATH=. /Users/gauravvraii/AA_LAST_SEM/CareerBot/healthcare_ai_assistant/ve
 
 ---
 
-### 💬 **FOLLOW-UP AGENT Testing - New Chatbot Interface**
+### 💬 **FOLLOW-UP AGENT Testing - Simple Chat Interface**
 
-The follow-up section now features an **interactive chatbot** instead of single Q&A:
+The follow-up section now features a **simple text-based chat** that's more stable across different environments:
 
-#### How to Use the Chatbot:
+#### How to Use the Follow-up Interface:
 1. **Complete an analysis first** using "Analyze with Agents" button
-2. **Ask follow-up questions** in the chat interface below
-3. **Continue the conversation** - ask multiple questions in sequence
+2. **Ask follow-up questions** in the text input below the analysis
+3. **Continue the conversation** - your questions and responses appear in the conversation history
 4. **Use "Clear Chat" button** to start a new conversation
 
-#### Sample Follow-up Conversation Flow:
+#### Sample Follow-up Conversation:
 ```
-👤 User: "How urgent is this really? Should I go to ER?"
+👤 You: How urgent is this really? Should I go to ER?
 🤖 Agent: [Provides urgency assessment and ER guidance]
 
-👤 User: "What can I do at home to feel better?"
+👤 You: What can I do at home to feel better?  
 🤖 Agent: [Provides home care recommendations]
-
-👤 User: "How long should I wait before seeing a doctor?"
-🤖 Agent: [Provides timeline guidance]
 ```
 
 #### General Follow-up Questions to Test:
