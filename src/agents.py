@@ -4,6 +4,10 @@ from typing import Dict, List, Optional, Union
 import logging
 from openai import OpenAI
 from PIL import Image
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

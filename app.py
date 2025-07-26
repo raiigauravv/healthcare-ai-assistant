@@ -1,6 +1,6 @@
 """
-Healthcare AI Assistant - Hugging Face Spaces Demo
-Multimodal healthcare AI with OpenAI integration
+Healthcare AI Assistant - Enhanced with AI Specialist Agents
+Multimodal healthcare AI with OpenAI integration and specialist agent system
 """
 
 import gradio as gr
@@ -9,6 +9,10 @@ import asyncio
 from typing import Optional, Tuple
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import our modules
 from src.ingestion import ingest_text, ingest_image, ingest_audio
@@ -401,10 +405,5 @@ def create_demo_interface():
 # Launch the interface
 if __name__ == "__main__":
     demo = create_demo_interface()
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False,
-        show_error=True,
-        debug=True
-    )
+    # For Hugging Face Spaces deployment
+    demo.launch()
