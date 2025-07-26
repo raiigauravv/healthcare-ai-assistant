@@ -28,13 +28,7 @@ logger = logging.getLogger(__name__)
 healthcare_ai = OpenAIHealthcareAssistant()
 agent_coordinator = AgentCoordinator()
 
-def multimodal_predict(
-    text_symptoms: str,
-    medical_image: Optional[str] = None,
-    audio_file: Optional[str] = None,
-    patient_age: int = 30,
-    patient_gender: str = "Not specified"
-) -> Tuple[str, str, float]:
+def predict_health_issue(text_symptoms: str, patient_age: int, patient_gender: str, patient_name: str, medical_image=None, audio_file=None):
     """
     Enhanced prediction function using AI agents for specialized healthcare analysis
     
@@ -81,7 +75,7 @@ def multimodal_predict(
         
         # Prepare patient data for agents
         patient_data = {
-            "name": "Patient",  # Default name since we don't have name input currently
+            "name": patient_name.strip() if patient_name.strip() else "Patient",  # Use provided name or default
             "age": str(patient_age),
             "gender": patient_gender,
             "symptoms": cleaned_text,
@@ -156,20 +150,27 @@ def multimodal_predict(
         return f"❌ Error during analysis: {str(e)}", "Please try again or consult a healthcare professional", 0.0
 
 
-def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str) -> str:
+def multimodal_predict(text_symptoms: str, medical_image=None, audio_file=None, patient_age: int = 30, patient_gender: str = "Not specified", patient_name: str = ""):
+    """Wrapper function for compatibility with the interface"""
+    return predict_health_issue(text_symptoms, patient_age, patient_gender, patient_name, medical_image, audio_file)
+
+
+def handle_followup_question(question: str, original_analysis: str, patient_age: int, patient_gender: str, patient_name: str, chat_history: list) -> tuple:
     """
-    Handle follow-up questions about the medical analysis
+    Handle follow-up questions about the medical analysis in chatbot format
     """
     try:
         if not question or not question.strip():
-            return "Please ask a specific question about your health analysis."
+            return chat_history, ""
         
         if not original_analysis or "Error" in original_analysis:
-            return "Please complete a health analysis first before asking follow-up questions."
+            error_msg = "Please complete a health analysis first before asking follow-up questions."
+            chat_history.append((question, error_msg))
+            return chat_history, ""
         
         # Prepare patient data for follow-up
         patient_data = {
-            "name": "Patient",
+            "name": patient_name.strip() if patient_name.strip() else "Patient",
             "age": str(patient_age),
             "gender": patient_gender,
             "symptoms": "Previous analysis completed"
@@ -180,11 +181,21 @@ def handle_followup_question(question: str, original_analysis: str, patient_age:
             agent_coordinator.handle_followup_question(original_analysis, question, patient_data)
         )
         
-        return response
+        # Clean up the response to remove placeholder names and make it more conversational
+        response = response.replace("[Your Name]", "Healthcare AI Assistant")
+        response = response.replace("Dear " + patient_data["name"] + ",", f"Hello {patient_data['name']},")
+        response = response.replace("Best,\n[Your Name]", "Hope this helps!\n\n- Your Healthcare AI Assistant 🤖")
+        
+        # Add to chat history
+        chat_history.append((question, response))
+        
+        return chat_history, ""
         
     except Exception as e:
         logger.error(f"Follow-up question error: {e}")
-        return f"Sorry, I encountered an error processing your question: {str(e)}"
+        error_msg = f"Sorry, I encountered an error processing your question: {str(e)}"
+        chat_history.append((question, error_msg))
+        return chat_history, ""
 
 def create_demo_interface():
     """Create and configure the Gradio interface"""
@@ -236,6 +247,14 @@ def create_demo_interface():
             with gr.Column(scale=1):
                 gr.Markdown("## 📝 Input Information")
                 
+                # Patient name input
+                patient_name = gr.Textbox(
+                    label="Patient Name",
+                    placeholder="Enter your name (optional)",
+                    value="",
+                    max_lines=1
+                )
+                
                 # Text input
                 text_symptoms = gr.Textbox(
                     label="Describe Symptoms",
@@ -245,12 +264,13 @@ def create_demo_interface():
                 )
                 
                 with gr.Row():
-                    patient_age = gr.Slider(
+                    patient_age = gr.Number(
                         minimum=0,
                         maximum=120,
                         value=30,
                         step=1,
-                        label="Age"
+                        label="Age",
+                        precision=0
                     )
                     patient_gender = gr.Dropdown(
                         choices=["Male", "Female", "Other", "Not specified"],
@@ -272,7 +292,7 @@ def create_demo_interface():
                 
                 # Submit button
                 submit_btn = gr.Button(
-                    "🔍 Analyze Health Data", 
+                    "🔍 Analyze with Agents", 
                     variant="primary",
                     size="lg"
                 )
@@ -313,66 +333,78 @@ def create_demo_interface():
                 </div>
                 """)
         
-        # Follow-up Questions Section
+        # Follow-up Questions Section - Chatbot Style
         with gr.Row():
             with gr.Column():
-                gr.Markdown("## 💬 Follow-up Questions")
-                gr.Markdown("*Have questions about your analysis? Ask our follow-up agent for clarification.*")
+                gr.Markdown("## 💬 Chat with Healthcare Agent")
+                gr.Markdown("*Continue the conversation with our AI healthcare agent for personalized follow-up questions.*")
                 
-                followup_question = gr.Textbox(
-                    label="Ask a follow-up question",
-                    placeholder="e.g., 'What should I do if the pain gets worse?' or 'Are there any home remedies I can try?'",
-                    lines=2
+                # Chatbot interface
+                chatbot = gr.Chatbot(
+                    label="Healthcare Agent Chat",
+                    height=400,
+                    show_label=True,
+                    avatar_images=("👤", "🤖"),
+                    type="tuples"
                 )
                 
-                followup_btn = gr.Button("Ask Follow-up Question", variant="secondary")
+                with gr.Row():
+                    followup_question = gr.Textbox(
+                        label="",
+                        placeholder="Ask me anything about your health analysis...",
+                        lines=1,
+                        scale=4
+                    )
+                    followup_btn = gr.Button("Send", variant="primary", scale=1)
                 
-                followup_response = gr.Textbox(
-                    label="Follow-up Response",
-                    lines=4,
-                    interactive=False
-                )
+                # Clear chat button
+                clear_chat_btn = gr.Button("🗑️ Clear Chat", variant="secondary", size="sm")
         
-        # Store the analysis for follow-up questions
+        # Store the analysis and chat history for follow-up questions
         analysis_state = gr.State(value="")
+        chat_history = gr.State(value=[])
         
         # Example inputs
         gr.Markdown("## 💡 Example Inputs")
         
+        # Example cases
         examples = [
             [
-                "I have been experiencing persistent headaches for the past week, along with nausea and sensitivity to light. The pain is usually on one side of my head and gets worse with physical activity.",
+                "I have severe chest pain, difficulty breathing, and I'm sweating. This started 30 minutes ago.",
                 None,
                 None,
-                "28",
-                "Female"
+                45,
+                "Female",
+                "Sarah Johnson"
             ],
             [
                 "I've had a persistent cough for 3 weeks with yellow-green phlegm, fever, and difficulty breathing. I'm also feeling very tired.",
                 None,
                 None,
-                "45",
-                "Male"
+                45,
+                "Male",
+                "Mike Smith"
             ],
             [
                 "I noticed a small, dark mole on my arm that has changed color and size over the past month. It's also slightly raised and sometimes itches.",
                 None,
                 None,
-                "35",
-                "Other"
+                35,
+                "Other",
+                "Alex Taylor"
             ]
         ]
         
         gr.Examples(
             examples=examples,
-            inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender],
+            inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender, patient_name],
             label="Click on an example to try it out"
         )
         
         # Connect the interface
         submit_btn.click(
             fn=multimodal_predict,
-            inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender],
+            inputs=[text_symptoms, medical_image, audio_file, patient_age, patient_gender, patient_name],
             outputs=[analysis_output, recommendations_output, confidence_output],
             show_progress=True
         ).then(
@@ -381,12 +413,26 @@ def create_demo_interface():
             outputs=[analysis_state]
         )
         
-        # Connect follow-up question handler
+        # Connect follow-up question handler (chatbot style)
         followup_btn.click(
             fn=handle_followup_question,
-            inputs=[followup_question, analysis_state, patient_age, patient_gender],
-            outputs=[followup_response],
+            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history],
+            outputs=[chatbot, followup_question],
             show_progress=True
+        )
+        
+        # Enter key support for chatbot
+        followup_question.submit(
+            fn=handle_followup_question,
+            inputs=[followup_question, analysis_state, patient_age, patient_gender, patient_name, chat_history],
+            outputs=[chatbot, followup_question],
+            show_progress=True
+        )
+        
+        # Clear chat functionality
+        clear_chat_btn.click(
+            fn=lambda: ([], []),
+            outputs=[chatbot, chat_history]
         )
         
         # Footer
