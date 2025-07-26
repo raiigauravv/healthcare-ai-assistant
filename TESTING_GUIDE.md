@@ -20,6 +20,12 @@ PYTHONPATH=. /Users/gauravvraii/AA_LAST_SEM/CareerBot/healthcare_ai_assistant/ve
 
 ## Manual Testing Scenarios (In Gradio Interface)
 
+**Note**: The app now features:
+- 🔢 **Number input for age** (instead of slider)
+- 🤖 **"Analyze with Agents" button** (updated from "Analyze Health Data")
+- 💬 **Interactive chatbot** for follow-up questions with conversation history
+- 👤 **Patient name field** that personalizes all interactions
+
 ### 🚨 **TRIAGE AGENT Testing**
 
 #### Test Case 1: Emergency
@@ -116,11 +122,29 @@ PYTHONPATH=. /Users/gauravvraii/AA_LAST_SEM/CareerBot/healthcare_ai_assistant/ve
 
 ---
 
-### 💬 **FOLLOW-UP AGENT Testing**
+### 💬 **FOLLOW-UP AGENT Testing - New Chatbot Interface**
 
-After any analysis, test these follow-up questions:
+The follow-up section now features an **interactive chatbot** instead of single Q&A:
 
-#### General Follow-up Questions:
+#### How to Use the Chatbot:
+1. **Complete an analysis first** using "Analyze with Agents" button
+2. **Ask follow-up questions** in the chat interface below
+3. **Continue the conversation** - ask multiple questions in sequence
+4. **Use "Clear Chat" button** to start a new conversation
+
+#### Sample Follow-up Conversation Flow:
+```
+👤 User: "How urgent is this really? Should I go to ER?"
+🤖 Agent: [Provides urgency assessment and ER guidance]
+
+👤 User: "What can I do at home to feel better?"
+🤖 Agent: [Provides home care recommendations]
+
+👤 User: "How long should I wait before seeing a doctor?"
+🤖 Agent: [Provides timeline guidance]
+```
+
+#### General Follow-up Questions to Test:
 1. "How urgent is this really? Should I go to ER?"
 2. "What can I do at home to feel better?"
 3. "How long should I wait before seeing a doctor?"
