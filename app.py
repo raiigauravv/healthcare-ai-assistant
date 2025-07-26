@@ -24,9 +24,23 @@ from src.agents import AgentCoordinator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Check for OpenAI API key
+openai_api_key = os.getenv('OPENAI_API_KEY')
+if not openai_api_key:
+    logger.error("OPENAI_API_KEY not found in environment variables")
+    API_KEY_MISSING = True
+else:
+    API_KEY_MISSING = False
+    logger.info("OpenAI API key found")
+
 # Initialize OpenAI assistant and Agent Coordinator
-healthcare_ai = OpenAIHealthcareAssistant()
-agent_coordinator = AgentCoordinator()
+try:
+    healthcare_ai = OpenAIHealthcareAssistant()
+    agent_coordinator = AgentCoordinator()
+    INITIALIZATION_SUCCESS = True
+except Exception as e:
+    logger.error(f"Failed to initialize AI components: {e}")
+    INITIALIZATION_SUCCESS = False
 
 def predict_health_issue(text_symptoms: str, patient_age: int, patient_gender: str, patient_name: str, medical_image=None, audio_file=None):
     """
@@ -43,6 +57,24 @@ def predict_health_issue(text_symptoms: str, patient_age: int, patient_gender: s
         Tuple of (agent_analysis, recommendations, confidence_score)
     """
     try:
+        # Check if API key is available
+        if API_KEY_MISSING or not INITIALIZATION_SUCCESS:
+            error_msg = """
+❌ **Configuration Error**: OpenAI API key not found.
+
+🔧 **For Hugging Face Spaces Administrators**:
+1. Go to your Space settings
+2. Add a new secret: `OPENAI_API_KEY`
+3. Paste your OpenAI API key as the value
+4. Restart the Space
+
+🏠 **For Local Development**:
+Add your OpenAI API key to the .env file.
+
+This is a demonstration of a healthcare AI system that requires OpenAI API access to function.
+"""
+            return error_msg, "Please configure the OpenAI API key to use this application.", 0.0
+        
         logger.info("Starting multimodal healthcare prediction with AI agents")
         
         # Validate inputs
@@ -162,6 +194,12 @@ def handle_followup_question(question: str, original_analysis: str, patient_age:
     try:
         if not question or not question.strip():
             return current_history, "", chat_history
+        
+        # Check if API key is available
+        if API_KEY_MISSING or not INITIALIZATION_SUCCESS:
+            error_msg = "⚠️ OpenAI API key not configured. Please configure the API key first."
+            new_history = current_history + f"\n\n👤 You: {question}\n🤖 Agent: {error_msg}"
+            return new_history, "", chat_history
         
         if not original_analysis or "Error" in original_analysis:
             error_msg = "Please complete a health analysis first before asking follow-up questions."
@@ -328,11 +366,14 @@ def create_demo_interface():
                 )
                 
                 # Status indicator
-                gr.HTML("""
+                status_color = "#28a745" if not API_KEY_MISSING and INITIALIZATION_SUCCESS else "#dc3545"
+                status_text = "Online and Ready" if not API_KEY_MISSING and INITIALIZATION_SUCCESS else "Configuration Required"
+                
+                gr.HTML(f"""
                 <div style="margin-top: 20px; padding: 15px; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <strong>🤖 Powered by:</strong> OpenAI GPT-4, CLIP, and Whisper models<br>
                     <strong>🧠 AI Agents:</strong> Triage, Dermatology, General Practice, Follow-up<br>
-                    <strong>⚡ Status:</strong> <span style="color: #28a745; font-weight: bold;">Online and Ready</span>
+                    <strong>⚡ Status:</strong> <span style="color: {status_color}; font-weight: bold;">{status_text}</span>
                 </div>
                 """)
         
