@@ -344,21 +344,21 @@ def create_demo_interface():
                 "I have been experiencing persistent headaches for the past week, along with nausea and sensitivity to light. The pain is usually on one side of my head and gets worse with physical activity.",
                 None,
                 None,
-                28,
+                "28",
                 "Female"
             ],
             [
                 "I've had a persistent cough for 3 weeks with yellow-green phlegm, fever, and difficulty breathing. I'm also feeling very tired.",
                 None,
                 None,
-                45,
+                "45",
                 "Male"
             ],
             [
                 "I noticed a small, dark mole on my arm that has changed color and size over the past month. It's also slightly raised and sometimes itches.",
                 None,
                 None,
-                35,
+                "35",
                 "Other"
             ]
         ]
