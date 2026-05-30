@@ -1,8 +1,28 @@
 """
-Healthcare AI Assistant - Premium Quality with Stable Gradio
-Multimodal healthcare AI with full agent system and advanced UI
-Using Gradio 4.36.1 for maximum stability and feature compatibility
+Healthcare AI Assistant - Multimodal AI with Specialist Agents
 """
+
+# huggingface_hub >= 0.30 removed HfFolder, but older Gradio versions still
+# import it. Inject a shim before importing gradio so the import doesn't crash.
+import huggingface_hub as _hfh
+if not hasattr(_hfh, 'HfFolder'):
+    import huggingface_hub.utils as _hfh_utils
+
+    class _HfFolder:
+        @classmethod
+        def get_token(cls):
+            try:
+                return _hfh_utils.get_token()
+            except Exception:
+                return None
+
+        @classmethod
+        def save_token(cls, token):
+            pass
+
+        token = None
+
+    _hfh.HfFolder = _HfFolder
 
 import gradio as gr
 import os
