@@ -304,14 +304,108 @@ class FollowUpAgent(BaseHealthcareAgent):
             }
 
 
+import httpx
+
+SPECIALISTS = {
+    "General Physician": (
+        "an experienced family medicine physician. Provide: "
+        "1) Assessment of likely conditions given the symptoms. "
+        "2) Self-care recommendations. "
+        "3) When to seek medical care. "
+        "This is for educational purposes only — always recommend professional consultation."
+    ),
+    "Cardiologist": (
+        "a cardiologist specializing in heart and cardiovascular conditions. Provide: "
+        "1) Cardiovascular assessment relevant to the symptoms. "
+        "2) Recommendations including lifestyle factors. "
+        "3) Red flags requiring urgent cardiac evaluation. "
+        "This is for educational purposes only — always recommend professional consultation."
+    ),
+    "Neurologist": (
+        "a neurologist specializing in brain and nervous system conditions. Provide: "
+        "1) Neurological assessment relevant to the symptoms. "
+        "2) Recommendations and next steps. "
+        "3) Warning signs needing urgent neurological evaluation. "
+        "This is for educational purposes only — always recommend professional consultation."
+    ),
+    "Dermatologist": (
+        "a dermatologist specializing in skin conditions. Provide: "
+        "1) Dermatological assessment relevant to the symptoms. "
+        "2) Skincare and treatment recommendations. "
+        "3) Any concerning features requiring urgent evaluation. "
+        "This is for educational purposes only — always recommend professional consultation."
+    ),
+}
+
+
 class AgentCoordinator:
     """Coordinates multiple agents and manages the overall analysis workflow"""
-    
+
     def __init__(self):
         self.triage_agent = TriageAgent()
         self.dermatology_agent = DermatologyAgent()
         self.general_practice_agent = GeneralPracticeAgent()
         self.followup_agent = FollowUpAgent()
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        proxy_url = (
+            os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+            or os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+        )
+        http_client = httpx.Client(proxy=proxy_url) if proxy_url else httpx.Client()
+        self._client = OpenAI(api_key=api_key, http_client=http_client) if api_key else None
+
+    def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
+                            image_data=None, audio_data=None) -> Dict:
+        """Synchronous analysis by all 4 specialist agents."""
+        if self._client is None:
+            return {
+                name: {
+                    "analysis": "OpenAI API key not configured.",
+                    "recommendations": "Please add your OPENAI_API_KEY secret in the Space settings.",
+                    "confidence_score": 0.0,
+                }
+                for name in SPECIALISTS
+            }
+
+        patient_line = (
+            f"Patient: {patient_context.get('name', 'Patient')}, "
+            f"{patient_context.get('age', '?')} year old "
+            f"{patient_context.get('gender', '')}.\n"
+            f"Symptoms: {symptoms_text}"
+        )
+
+        results = {}
+        for name, role in SPECIALISTS.items():
+            results[name] = self._call_specialist(name, role, patient_line)
+        return results
+
+    def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
+        try:
+            response = self._client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": f"You are {role}"},
+                    {"role": "user", "content": patient_line},
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            text = response.choices[0].message.content or ""
+            lines = text.strip().split("\n")
+            mid = max(1, len(lines) // 2)
+            return {
+                "analysis": "\n".join(lines[:mid]),
+                "recommendations": "\n".join(lines[mid:]),
+                "confidence_score": 0.82,
+            }
+        except Exception as e:
+            logger.error(f"{name} agent error: {e}")
+            return {
+                "analysis": f"Error during {name} analysis: {e}",
+                "recommendations": "Please consult a healthcare professional.",
+                "confidence_score": 0.0,
+            }
     
     async def analyze_patient(self, patient_data: Dict, image: Optional[Image.Image] = None) -> Dict:
         """Coordinate analysis across multiple agents"""
