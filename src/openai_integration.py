@@ -30,7 +30,7 @@ class OpenAIHealthcareAssistant:
             self.model = None
         else:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-flash")
+            self.model = genai.GenerativeModel("gemini-pro")
             self.mock_mode = False
             logger.info("Gemini client initialized successfully")
 

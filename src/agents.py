@@ -349,7 +349,7 @@ class AgentCoordinator:
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel("gemini-1.5-flash")
+            self._model = genai.GenerativeModel("gemini-pro")
         else:
             self._model = None
 
