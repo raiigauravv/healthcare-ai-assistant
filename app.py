@@ -2,44 +2,6 @@
 Healthcare AI Assistant - Multimodal AI with Specialist Agents
 """
 
-# ── Compatibility shims — must run before any gradio import ─────────────────
-
-# 1. huggingface_hub >= 0.30 removed HfFolder; older Gradio still imports it.
-import huggingface_hub as _hfh
-if not hasattr(_hfh, 'HfFolder'):
-    import huggingface_hub.utils as _hfh_utils
-
-    class _HfFolder:
-        @classmethod
-        def get_token(cls):
-            try:
-                return _hfh_utils.get_token()
-            except Exception:
-                return None
-
-        @classmethod
-        def save_token(cls, token):
-            pass
-
-        token = None
-
-    _hfh.HfFolder = _HfFolder
-
-# 2. gradio_client 0.9.0 calls `"const" in schema` where schema can be a
-#    Python bool (valid JSON Schema: additionalProperties: true/false).
-#    `"x" in True` raises TypeError — patch the function to guard against it.
-import gradio_client.utils as _gcu
-_orig_schema_to_type = _gcu._json_schema_to_python_type
-
-def _safe_schema_to_type(schema, defs=None):
-    if isinstance(schema, bool):
-        return "bool"
-    return _orig_schema_to_type(schema, defs)
-
-_gcu._json_schema_to_python_type = _safe_schema_to_type
-
-# ─────────────────────────────────────────────────────────────────────────────
-
 import gradio as gr
 import os
 import asyncio
