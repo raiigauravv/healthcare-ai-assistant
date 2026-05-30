@@ -4,6 +4,7 @@ Handles all OpenAI API calls for multimodal healthcare analysis
 """
 
 import os
+import httpx
 from openai import OpenAI
 import base64
 import logging
@@ -28,7 +29,14 @@ class OpenAIHealthcareAssistant:
             self.mock_mode = True
             self.client = None
         else:
-            self.client = OpenAI(api_key=self.api_key)
+            proxy_url = (
+                os.getenv("HTTPS_PROXY")
+                or os.getenv("https_proxy")
+                or os.getenv("HTTP_PROXY")
+                or os.getenv("http_proxy")
+            )
+            http_client = httpx.Client(proxy=proxy_url) if proxy_url else httpx.Client()
+            self.client = OpenAI(api_key=self.api_key, http_client=http_client)
             self.mock_mode = False
             logger.info("OpenAI client initialized successfully")
     

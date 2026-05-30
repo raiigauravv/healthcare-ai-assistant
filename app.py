@@ -329,15 +329,13 @@ def create_premium_interface():
                         maximum=120,
                         value=30,
                         step=1,
-                        label="🎂 Age",
-                        info="Patient's age in years"
+                        label="🎂 Age"
                     )
-                
+
                 patient_gender = gr.Dropdown(
                     choices=["Male", "Female", "Non-binary", "Prefer not to say"],
                     label="⚧ Gender",
-                    value="Male",
-                    info="Patient's gender identity"
+                    value="Male"
                 )
                 
                 # Symptoms Input Section  
@@ -354,13 +352,11 @@ def create_premium_interface():
                 with gr.Row():
                     medical_image = gr.Image(
                         label="🖼️ Medical Image",
-                        type="filepath",
-                        info="Upload medical images (X-rays, MRI, skin photos, etc.)"
+                        type="filepath"
                     )
                     audio_file = gr.Audio(
-                        label="🎤 Audio Recording", 
-                        type="filepath",
-                        info="Record or upload audio describing symptoms"
+                        label="🎤 Audio Recording",
+                        type="filepath"
                     )
                 
                 # Analysis Button
