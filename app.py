@@ -371,31 +371,31 @@ def create_premium_interface():
                 gr.Markdown("## 📊 AI Specialist Analysis Results")
                 
                 with gr.Tabs():
-                    with gr.TabItem("🩺 General Physician"):
+                    with gr.Tab("🩺 General Physician"):
                         gp_output = gr.Markdown(
                             "Click 'Analyze with AI Specialists' to get General Physician analysis...",
                             height=300
                         )
                     
-                    with gr.TabItem("❤️ Cardiologist"):
+                    with gr.Tab("❤️ Cardiologist"):
                         cardio_output = gr.Markdown(
                             "Click 'Analyze with AI Specialists' to get Cardiologist analysis...",
                             height=300
                         )
                     
-                    with gr.TabItem("🧠 Neurologist"):
+                    with gr.Tab("🧠 Neurologist"):
                         neuro_output = gr.Markdown(
                             "Click 'Analyze with AI Specialists' to get Neurologist analysis...",
                             height=300
                         )
                     
-                    with gr.TabItem("🔬 Dermatologist"):
+                    with gr.Tab("🔬 Dermatologist"):
                         derma_output = gr.Markdown(
                             "Click 'Analyze with AI Specialists' to get Dermatologist analysis...",
                             height=300
                         )
                     
-                    with gr.TabItem("📋 Complete Summary"):
+                    with gr.Tab("📋 Complete Summary"):
                         summary_output = gr.Markdown(
                             "Click 'Analyze with AI Specialists' to get comprehensive analysis summary...",
                             height=300
