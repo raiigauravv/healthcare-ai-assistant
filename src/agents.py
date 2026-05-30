@@ -348,12 +348,7 @@ class AgentCoordinator:
         self.followup_agent = FollowUpAgent()
 
         api_key = os.getenv("OPENAI_API_KEY")
-        proxy_url = (
-            os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
-            or os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
-        )
-        http_client = httpx.Client(proxy=proxy_url) if proxy_url else httpx.Client()
-        self._client = OpenAI(api_key=api_key, http_client=http_client) if api_key else None
+        self._client = OpenAI(api_key=api_key) if api_key else None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
