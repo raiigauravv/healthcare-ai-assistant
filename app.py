@@ -2,6 +2,18 @@
 Healthcare AI Assistant - Multimodal AI with Specialist Agents
 """
 
+# gradio_client 0.9.x bug: `"const" in schema` raises TypeError when schema is
+# a Python bool (valid JSON Schema for additionalProperties: true/false).
+import gradio_client.utils as _gcu
+_orig = _gcu._json_schema_to_python_type
+
+def _patched(schema, defs=None):
+    if isinstance(schema, bool):
+        return "bool"
+    return _orig(schema, defs)
+
+_gcu._json_schema_to_python_type = _patched
+
 import gradio as gr
 import os
 import asyncio
@@ -487,8 +499,6 @@ def create_premium_interface():
         **🛡️ Privacy & Security:**
         - No personal data is stored permanently
         - All interactions are processed securely
-        - HIPAA-compliant design principles
-        
         **Version**: Premium Edition 2.0 | **Status**: ✅ Fully Operational
         """)
     
