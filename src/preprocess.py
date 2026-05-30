@@ -1,19 +1,19 @@
 # src/preprocess.py
-import torchvision.transforms as T
+from PIL import Image
+import numpy as np
 
 def preprocess_text(text):
     """Preprocess text input"""
     return text.lower().strip()
 
 def preprocess_image(image):
-    """Preprocess PIL image"""
-    transform = T.Compose([
-        T.Resize((224, 224)), 
-        T.ToTensor()
-    ])
-    return transform(image)
+    """Preprocess PIL image to 224x224 numpy array"""
+    image = image.resize((224, 224))
+    return np.array(image).astype(np.float32) / 255.0
 
 def preprocess_audio(audio_tuple):
-    """Preprocess audio waveform"""
+    """Preprocess audio waveform — downmix to mono"""
     waveform, rate = audio_tuple
-    return waveform.mean(0)  # downmix to mono
+    if waveform.ndim > 1:
+        return waveform.mean(axis=0)
+    return waveform
