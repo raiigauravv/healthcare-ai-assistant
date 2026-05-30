@@ -2,7 +2,6 @@
 import os
 from typing import Dict, List, Optional, Union
 import logging
-from openai import OpenAI
 from PIL import Image
 from dotenv import load_dotenv
 
@@ -304,7 +303,7 @@ class FollowUpAgent(BaseHealthcareAgent):
             }
 
 
-import httpx
+import google.generativeai as genai
 
 SPECIALISTS = {
     "General Physician": (
@@ -347,17 +346,21 @@ class AgentCoordinator:
         self.general_practice_agent = GeneralPracticeAgent()
         self.followup_agent = FollowUpAgent()
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        self._client = OpenAI(api_key=api_key) if api_key else None
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            genai.configure(api_key=api_key)
+            self._model = genai.GenerativeModel("gemini-1.5-flash")
+        else:
+            self._model = None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
         """Synchronous analysis by all 4 specialist agents."""
-        if self._client is None:
+        if self._model is None:
             return {
                 name: {
-                    "analysis": "OpenAI API key not configured.",
-                    "recommendations": "Please add your OPENAI_API_KEY secret in the Space settings.",
+                    "analysis": "GEMINI_API_KEY not configured.",
+                    "recommendations": "Add GEMINI_API_KEY as a secret in HF Space settings.",
                     "confidence_score": 0.0,
                 }
                 for name in SPECIALISTS
@@ -377,17 +380,24 @@ class AgentCoordinator:
 
     def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
         try:
-            response = self._client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": f"You are {role}"},
-                    {"role": "user", "content": patient_line},
-                ],
-                max_tokens=600,
-                temperature=0.4,
+            prompt = (
+                f"You are {role}\n\n"
+                f"Analyze this patient case and provide:\n"
+                f"1. Analysis of likely conditions\n"
+                f"2. Specific recommendations\n"
+                f"3. Red flags to watch for\n\n"
+                f"{patient_line}\n\n"
+                f"This is for educational purposes only. Always recommend professional medical consultation."
             )
-            text = response.choices[0].message.content or ""
-            lines = text.strip().split("\n")
+            response = self._model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=600,
+                    temperature=0.4,
+                ),
+            )
+            text = (response.text or "").strip()
+            lines = text.split("\n")
             mid = max(1, len(lines) // 2)
             return {
                 "analysis": "\n".join(lines[:mid]),
