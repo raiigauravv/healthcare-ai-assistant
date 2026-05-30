@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union
 import logging
 from PIL import Image
 from dotenv import load_dotenv
+from google import genai
 
 # Load environment variables
 load_dotenv()
@@ -16,7 +17,7 @@ class BaseHealthcareAgent:
     def __init__(self, specialty: str, system_prompt: str):
         self.specialty = specialty
         self.system_prompt = system_prompt
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = None  # unused; AgentCoordinator handles all API calls
         
     async def analyze(self, patient_data: Dict) -> Dict:
         """Base analysis method - to be overridden by specialist agents"""
@@ -303,8 +304,6 @@ class FollowUpAgent(BaseHealthcareAgent):
             }
 
 
-import google.generativeai as genai
-
 SPECIALISTS = {
     "General Physician": (
         "an experienced family medicine physician. Provide: "
@@ -347,16 +346,12 @@ class AgentCoordinator:
         self.followup_agent = FollowUpAgent()
 
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel("gemini-pro")
-        else:
-            self._model = None
+        self._client = genai.Client(api_key=api_key) if api_key else None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
         """Synchronous analysis by all 4 specialist agents."""
-        if self._model is None:
+        if self._client is None:
             return {
                 name: {
                     "analysis": "GEMINI_API_KEY not configured.",
@@ -389,12 +384,10 @@ class AgentCoordinator:
                 f"{patient_line}\n\n"
                 f"This is for educational purposes only. Always recommend professional medical consultation."
             )
-            response = self._model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=600,
-                    temperature=0.4,
-                ),
+            response = self._client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config={"max_output_tokens": 600, "temperature": 0.4},
             )
             text = (response.text or "").strip()
             lines = text.split("\n")

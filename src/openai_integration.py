@@ -1,16 +1,17 @@
 """
-Healthcare AI Assistant - Gemini Integration
+Healthcare AI Assistant - Gemini Integration (google-genai SDK)
 """
 
 import os
-import base64
 import logging
 from typing import Dict, Any, Optional
 from PIL import Image
-import google.generativeai as genai
+from google import genai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+MODEL = "gemini-2.0-flash"
 
 SYSTEM_DISCLAIMER = (
     "You are an AI healthcare assistant for educational purposes only. "
@@ -27,22 +28,19 @@ class OpenAIHealthcareAssistant:
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found. Using mock responses.")
             self.mock_mode = True
-            self.model = None
+            self.client = None
         else:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-pro")
+            self.client = genai.Client(api_key=self.api_key)
             self.mock_mode = False
             logger.info("Gemini client initialized successfully")
 
     def _generate(self, prompt: str, max_tokens: int = 800) -> str:
-        response = self.model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.4,
-            ),
+        response = self.client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config={"max_output_tokens": max_tokens, "temperature": 0.4},
         )
-        return response.text
+        return response.text or ""
 
     def encode_image(self, image_path: str) -> Optional[Image.Image]:
         try:
@@ -61,19 +59,18 @@ class OpenAIHealthcareAssistant:
             prompt = (
                 f"{SYSTEM_DISCLAIMER}\n\n"
                 f"Patient symptoms: {symptoms}\n\n"
-                "Please analyze this medical image:\n"
+                "Analyze this medical image:\n"
                 "1. Objective visual observations\n"
                 "2. Possible correlations with described symptoms\n"
                 "3. Recommendations for further evaluation\n"
                 "Emphasize this is not a medical diagnosis."
             )
-            response = self.model.generate_content(
-                [prompt, img],
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=500, temperature=0.3
-                ),
+            response = self.client.models.generate_content(
+                model=MODEL,
+                contents=[prompt, img],
+                config={"max_output_tokens": 500, "temperature": 0.3},
             )
-            return response.text
+            return response.text or "Image analysis unavailable."
         except Exception as e:
             logger.error(f"Image analysis error: {e}")
             return f"Image analysis unavailable: {e}"
@@ -82,7 +79,7 @@ class OpenAIHealthcareAssistant:
         if self.mock_mode:
             return self._mock_audio_analysis(symptoms)
         return (
-            "Audio transcription processed. Please describe any additional audio observations "
+            "Audio recorded. Please describe any additional observations "
             "in your symptom description for more accurate analysis."
         )
 
@@ -112,7 +109,7 @@ class OpenAIHealthcareAssistant:
             if audio_analysis:
                 prompt += f"Audio Analysis: {audio_analysis}\n"
             prompt += (
-                "\nProvide a structured analysis with:\n"
+                "\nProvide a structured analysis:\n"
                 "1. Personalized greeting using patient name if provided\n"
                 "2. Summary of presented symptoms\n"
                 "3. Possible conditions to discuss with healthcare providers\n"
@@ -134,7 +131,7 @@ class OpenAIHealthcareAssistant:
     def get_health_recommendation(self, context: str) -> str:
         """Answer a follow-up health question."""
         if self.mock_mode:
-            return "Demo mode — add GEMINI_API_KEY secret in HF Space settings for real responses."
+            return "Demo mode — add GEMINI_API_KEY secret in HF Space settings."
         try:
             prompt = f"{SYSTEM_DISCLAIMER}\n\nPatient question: {context}"
             return self._generate(prompt, max_tokens=300)
@@ -168,16 +165,10 @@ class OpenAIHealthcareAssistant:
             }
 
     def _mock_image_analysis(self, symptoms: str) -> str:
-        return (
-            f"Mock Image Analysis for symptoms: '{symptoms[:50]}...'\n"
-            "Add GEMINI_API_KEY to enable real image analysis."
-        )
+        return f"Mock Image Analysis for: '{symptoms[:50]}...'\nAdd GEMINI_API_KEY to enable real analysis."
 
     def _mock_audio_analysis(self, symptoms: str) -> str:
-        return (
-            f"Mock Audio Analysis for symptoms: '{symptoms[:50]}...'\n"
-            "Add GEMINI_API_KEY to enable real audio analysis."
-        )
+        return f"Mock Audio Analysis for: '{symptoms[:50]}...'\nAdd GEMINI_API_KEY to enable real analysis."
 
     def _mock_comprehensive_analysis(self, symptoms: str, age: int, gender: str) -> Dict[str, Any]:
         return {
@@ -190,7 +181,7 @@ class OpenAIHealthcareAssistant:
                 "General Recommendations (Demo):\n"
                 "• Schedule consultation with appropriate healthcare provider\n"
                 "• Monitor symptom progression\n"
-                "• Seek immediate care if symptoms worsen significantly"
+                "• Seek immediate care if symptoms worsen"
             ),
             "confidence": 0.0,
         }
