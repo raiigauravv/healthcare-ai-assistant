@@ -1,5 +1,4 @@
 # Core dependencies for Hugging Face Spaces deployment - COMPLETE SET
-gradio==4.44.1
 openai>=1.55.0
 httpx>=0.27.0
 python-dotenv==1.0.0
