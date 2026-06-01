@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healthcare AI Assistant</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Babel standalone for JSX -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.4/babel.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter','system-ui','sans-serif'] } } }
+    };
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #f0f4ff; color: #1e293b; }
+
+    /* ── Animations ── */
+    @keyframes fadeUp   { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:none } }
+    @keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
+    @keyframes shimmer  { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    @keyframes spin     { to { transform:rotate(360deg) } }
+    @keyframes float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    @keyframes gradShift{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes dot1     { 0%,80%,100%{transform:scale(0);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+    @keyframes dot2     { 0%,100%{transform:scale(0);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+    @keyframes dot3     { 0%,100%{transform:scale(0);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+
+    .anim-fade-up  { animation: fadeUp .45s ease-out both; }
+    .anim-fade-in  { animation: fadeIn .3s ease-out both; }
+    .anim-spin     { animation: spin .9s linear infinite; }
+    .anim-float    { animation: float 3s ease-in-out infinite; }
+
+    /* ── Skeleton ── */
+    .skeleton {
+      background: linear-gradient(90deg,#e2e8f0 25%,#f1f5f9 50%,#e2e8f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+    }
+
+    /* ── Hero gradient ── */
+    .hero-bg {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 35%, #1d4ed8 65%, #0891b2 100%);
+      background-size: 200% 200%;
+      animation: gradShift 9s ease infinite;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+
+    /* ── Input ── */
+    .inp {
+      width: 100%;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: .9rem;
+      background: #fafbff;
+      color: #1e293b;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .inp:focus { outline: none; border-color: #1d4ed8; box-shadow: 0 0 0 3px rgba(29,78,216,.1); }
+
+    /* ── Buttons ── */
+    .btn-analyze {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #1d4ed8, #1e40af);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: transform .25s, box-shadow .25s;
+      box-shadow: 0 4px 18px rgba(29,78,216,.38);
+    }
+    .btn-analyze:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(29,78,216,.55); }
+    .btn-analyze:disabled { opacity: .65; cursor: not-allowed; }
+
+    .btn-send {
+      width: 46px; height: 46px;
+      border: none; border-radius: 10px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: transform .2s, box-shadow .2s;
+      flex-shrink: 0;
+    }
+    .btn-send:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn-send:disabled { cursor: not-allowed; }
+
+    /* ── Gender pills ── */
+    .gpill {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 2px solid #e2e8f0;
+      background: #fff;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #64748b;
+      transition: all .2s;
+    }
+    .gpill.active { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
+
+    /* ── Tabs ── */
+    .tab-bar { background: #f8faff; border-bottom: 2px solid #e2e8f0; display: flex; overflow-x: auto; padding: 8px 8px 0; gap: 4px; }
+    .tab-bar::-webkit-scrollbar { height: 0; }
+    .tab-btn {
+      padding: 9px 14px;
+      border: none; border-bottom: 3px solid transparent;
+      background: transparent;
+      font-size: .79rem; font-weight: 600; color: #64748b;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .tab-btn:hover:not(.tab-active) { background: #eff6ff; color: #1d4ed8; }
+    .tab-btn.tab-active { background: #fff; }
+
+    /* ── Chat bubbles ── */
+    .bubble-user {
+      background: linear-gradient(135deg, #1d4ed8, #1e40af);
+      color: #fff;
+      border-radius: 18px 18px 4px 18px;
+      box-shadow: 0 2px 8px rgba(29,78,216,.2);
+    }
+    .bubble-bot {
+      background: #fff;
+      color: #1e293b;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px 18px 18px 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 18px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: #f8faff;
+    }
+    .upload-zone:hover { border-color: #1d4ed8; background: #eff6ff; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ═══════════════════════════════════════════
+   API helpers
+═══════════════════════════════════════════ */
+const api = {
+  health:  () => fetch('/api/health').then(r => r.json()),
+  analyze: (fd) => fetch('/api/analyze', { method:'POST', body:fd })
+    .then(async r => { if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText); return r.json(); }),
+  chat:    (body) => fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(async r => { if (!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText); return r.json(); }),
+};
+
+/* ═══════════════════════════════════════════
+   ConfidenceBar
+═══════════════════════════════════════════ */
+function ConfidenceBar({ score }) {
+  const pct = Math.round(score * 100);
+  const color = score >= .7 ? '#22c55e' : score >= .4 ? '#f59e0b' : '#ef4444';
+  const label = score >= .7 ? 'High' : score >= .4 ? 'Moderate' : 'Low';
+  return (
+    <div style={{marginTop:14}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
+        <span style={{fontSize:'.7rem', fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'.5px'}}>Confidence</span>
+        <div style={{display:'flex', alignItems:'center', gap:6}}>
+          <span style={{fontWeight:800, color, fontSize:'.9rem'}}>{pct}%</span>
+          <span style={{background:color+'20', color, padding:'2px 8px', borderRadius:12, fontSize:'.68rem', fontWeight:700}}>{label}</span>
+        </div>
+      </div>
+      <div style={{background:'#f1f5f9', borderRadius:6, height:8, overflow:'hidden'}}>
+        <div style={{
+          height:'100%', borderRadius:6,
+          background:`linear-gradient(90deg,${color}88,${color})`,
+          width:`${pct}%`, transition:'width 1s ease-out'
+        }} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SkeletonCard
+═══════════════════════════════════════════ */
+function SkeletonCard() {
+  const line = (w,h=10,mt=0) => (
+    <div className="skeleton" style={{height:h, width:w, marginTop:mt}} />
+  );
+  return (
+    <div className="anim-fade-in" style={{padding:'20px 0'}}>
+      <div style={{display:'flex', gap:14, marginBottom:20, alignItems:'center'}}>
+        <div className="skeleton" style={{width:52, height:52, borderRadius:'50%', flexShrink:0}} />
+        <div style={{flex:1}}>{line('60%',16)}{line('40%',12,8)}</div>
+      </div>
+      <div style={{background:'#f8faff', borderRadius:12, padding:18, marginBottom:14}}>
+        {line('30%',12)}{line('100%',10,14)}{line('90%',10,8)}{line('80%',10,8)}{line('95%',10,8)}
+      </div>
+      <div style={{background:'#f0fdf4', borderRadius:12, padding:18, marginBottom:14}}>
+        {line('35%',12)}{line('100%',10,14)}{line('75%',10,8)}{line('88%',10,8)}
+      </div>
+      <div style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:14}}>
+        {line('100%',8)}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SpecialistCard
+═══════════════════════════════════════════ */
+function SpecialistCard({ name, icon, color, data }) {
+  if (!data) return (
+    <div style={{padding:'60px 0', textAlign:'center', color:'#94a3b8'}}>
+      <div style={{fontSize:'3rem', opacity:.35, marginBottom:12}} className="anim-float">🔬</div>
+      <p style={{fontWeight:600}}>No analysis available</p>
+    </div>
+  );
+  const { analysis='', recommendations='', confidence_score=0 } = data;
+  return (
+    <div className="anim-fade-up" style={{padding:'16px 0'}}>
+      {/* Header */}
+      <div style={{display:'flex', alignItems:'center', gap:14, marginBottom:20}}>
+        <div style={{
+          background:`${color}18`, border:`2px solid ${color}30`, borderRadius:'50%',
+          width:52, height:52, display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:'1.4rem', flexShrink:0
+        }}>{icon}</div>
+        <div style={{flex:1}}>
+          <h3 style={{fontWeight:800, fontSize:'1.05rem', color:'#1e293b', margin:0}}>{name}</h3>
+          <p style={{fontSize:'.75rem', color:'#94a3b8', margin:0}}>AI Specialist · Educational Analysis</p>
+        </div>
+        <div style={{
+          background:`${color}12`, border:`1px solid ${color}28`,
+          borderRadius:20, padding:'4px 14px',
+          fontSize:'.7rem', fontWeight:700, color
+        }}>AI</div>
+      </div>
+
+      {/* Assessment */}
+      <div style={{background:'#f8faff', borderRadius:12, padding:'16px 18px', marginBottom:12, borderLeft:`4px solid ${color}`}}>
+        <div style={{fontSize:'.72rem', fontWeight:700, color, textTransform:'uppercase', letterSpacing:'.5px', marginBottom:10}}>
+          🔍 Clinical Assessment
+        </div>
+        <div style={{color:'#374151', fontSize:'.875rem', lineHeight:1.75, whiteSpace:'pre-wrap'}}>{analysis}</div>
+      </div>
+
+      {/* Recommendations */}
+      <div style={{background:'#f0fdf4', borderRadius:12, padding:'16px 18px', marginBottom:12, borderLeft:'4px solid #22c55e'}}>
+        <div style={{fontSize:'.72rem', fontWeight:700, color:'#16a34a', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:10}}>
+          💊 Recommendations
+        </div>
+        <div style={{color:'#374151', fontSize:'.875rem', lineHeight:1.75, whiteSpace:'pre-wrap'}}>{recommendations}</div>
+      </div>
+
+      {/* Confidence */}
+      <div style={{background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:'14px 18px'}}>
+        <ConfidenceBar score={confidence_score} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SummaryTab
+═══════════════════════════════════════════ */
+function SummaryTab({ res }) {
+  if (!res) return null;
+  const specialists = [
+    { key:'general_physician', label:'General Physician', icon:'🩺', color:'#1d4ed8' },
+    { key:'cardiologist',      label:'Cardiologist',      icon:'❤️',  color:'#ef4444' },
+    { key:'neurologist',       label:'Neurologist',       icon:'🧠', color:'#8b5cf6' },
+    { key:'dermatologist',     label:'Dermatologist',     icon:'🔬', color:'#0891b2' },
+  ];
+  return (
+    <div className="anim-fade-up" style={{padding:'16px 0'}}>
+      {/* Report header */}
+      <div style={{background:'linear-gradient(135deg,#1d4ed8,#1e40af)', borderRadius:14, padding:'20px 24px', color:'#fff', marginBottom:18}}>
+        <h3 style={{fontWeight:900, fontSize:'1.05rem', margin:'0 0 4px'}}>🏥 Healthcare Analysis Report</h3>
+        <p style={{opacity:.8, fontSize:'.8rem', margin:0}}>Generated {res.timestamp}</p>
+      </div>
+
+      {/* Patient grid */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14}}>
+        {[['👤','Patient',res.name],['🎂','Age',`${res.age} yrs`],['⚧','Gender',res.gender],
+          ['📅','Date',new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})]
+        ].map(([icon,label,value]) => (
+          <div key={label} style={{background:'#f8faff', border:'1px solid #e2e8f0', borderRadius:10, padding:'10px 14px', display:'flex', alignItems:'center', gap:10}}>
+            <span style={{fontSize:'1.2rem'}}>{icon}</span>
+            <div>
+              <div style={{fontSize:'.65rem', color:'#94a3b8', fontWeight:700, textTransform:'uppercase', letterSpacing:'.4px'}}>{label}</div>
+              <div style={{fontSize:'.875rem', fontWeight:700, color:'#1e293b'}}>{value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input status */}
+      <div style={{display:'flex', gap:10, marginBottom:16}}>
+        {[
+          [`🖼️ Image ${res.has_image?'Uploaded':'Not Provided'}`, res.has_image],
+          [`🎤 Audio ${res.has_audio?'Uploaded':'Not Provided'}`, res.has_audio],
+        ].map(([label,ok]) => (
+          <div key={label} style={{
+            flex:1, padding:'10px', borderRadius:10, textAlign:'center',
+            background:ok?'#f0fdf4':'#fef2f2', border:`1px solid ${ok?'#86efac':'#fca5a5'}`,
+            color:ok?'#16a34a':'#dc2626', fontWeight:700, fontSize:'.8rem'
+          }}>{label}</div>
+        ))}
+      </div>
+
+      {/* Specialist summaries */}
+      <h4 style={{fontWeight:700, color:'#1e293b', margin:'0 0 10px', fontSize:'.875rem'}}>📋 Specialist Summaries</h4>
+      {specialists.map(({key,label,icon,color}) => {
+        const d = res[key]; if (!d) return null;
+        return (
+          <div key={key} style={{border:'1px solid #e2e8f0', borderRadius:12, padding:'14px 16px', marginBottom:10}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+              <span style={{fontWeight:700, color, fontSize:'.875rem'}}>{icon} {label}</span>
+            </div>
+            <p style={{margin:'0 0 8px', color:'#374151', fontSize:'.82rem', lineHeight:1.6}}>
+              {(d.analysis||'').substring(0,260)}{(d.analysis||'').length>260?'…':''}
+            </p>
+            <ConfidenceBar score={d.confidence_score||0} />
+          </div>
+        );
+      })}
+
+      {/* Disclaimer */}
+      <div style={{background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:12, padding:'14px 16px', marginTop:14}}>
+        <p style={{margin:0, color:'#92400e', fontSize:'.78rem', lineHeight:1.65}}>
+          ⚠️ <strong>Medical Disclaimer:</strong> This AI analysis is for educational purposes only.
+          It does not constitute medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ResultsPanel
+═══════════════════════════════════════════ */
+const TABS = [
+  { id:'gp',      label:'General Physician', short:'GP',    icon:'🩺', color:'#1d4ed8' },
+  { id:'cardio',  label:'Cardiologist',       short:'Heart', icon:'❤️',  color:'#ef4444' },
+  { id:'neuro',   label:'Neurologist',        short:'Neuro', icon:'🧠', color:'#8b5cf6' },
+  { id:'derm',    label:'Dermatologist',      short:'Skin',  icon:'🔬', color:'#0891b2' },
+  { id:'summary', label:'Full Summary',       short:'All',   icon:'📋', color:'#059669' },
+];
+const KEY_MAP = { gp:'general_physician', cardio:'cardiologist', neuro:'neurologist', derm:'dermatologist' };
+
+function ResultsPanel({ results, loading }) {
+  const [active, setActive] = useState('gp');
+  useEffect(() => { if (results) setActive('gp'); }, [results]);
+
+  const tab = TABS.find(t => t.id === active);
+
+  return (
+    <div className="card" style={{overflow:'hidden', minHeight:480}}>
+      {/* Tab bar */}
+      <div className="tab-bar">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            className={`tab-btn ${active===t.id?'tab-active':''}`}
+            onClick={() => setActive(t.id)}
+            style={{
+              color: active===t.id ? t.color : '#64748b',
+              borderBottom: active===t.id ? `3px solid ${t.color}` : '3px solid transparent',
+            }}
+          >
+            <span>{t.icon}</span>
+            <span>{t.short}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{padding:'4px 22px 22px', maxHeight:500, overflowY:'auto'}}>
+        {loading ? (
+          <SkeletonCard />
+        ) : !results ? (
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:300, color:'#94a3b8'}}>
+            <div className="anim-float" style={{fontSize:'3.5rem', opacity:.35, marginBottom:14}}>🏥</div>
+            <p style={{fontWeight:700, fontSize:'.95rem', margin:'0 0 6px'}}>Ready for Analysis</p>
+            <p style={{fontSize:'.82rem', color:'#cbd5e1', margin:0}}>Fill the form and click Analyze</p>
+          </div>
+        ) : active === 'summary' ? (
+          <SummaryTab res={results} />
+        ) : (
+          <SpecialistCard
+            name={tab.label} icon={tab.icon} color={tab.color}
+            data={results[KEY_MAP[active]]}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ChatMessage
+═══════════════════════════════════════════ */
+function ChatMessage({ role, content }) {
+  const user = role === 'user';
+  return (
+    <div style={{display:'flex', justifyContent:user?'flex-end':'flex-start', alignItems:'flex-end', gap:8, marginBottom:14}}>
+      {!user && (
+        <div style={{width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#1d4ed8,#0891b2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.9rem', flexShrink:0}}>🤖</div>
+      )}
+      <div className={user?'bubble-user':'bubble-bot'} style={{maxWidth:'76%', padding:'11px 16px', fontSize:'.875rem', lineHeight:1.7}}>
+        {content}
+      </div>
+      {user && (
+        <div style={{width:32, height:32, borderRadius:'50%', background:'#e2e8f0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.85rem', flexShrink:0}}>👤</div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   TypingDots
+═══════════════════════════════════════════ */
+function TypingDots() {
+  return (
+    <div style={{display:'flex', alignItems:'flex-end', gap:8, marginBottom:14}}>
+      <div style={{width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#1d4ed8,#0891b2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.9rem'}}>🤖</div>
+      <div className="bubble-bot" style={{padding:'14px 18px', display:'flex', gap:5, alignItems:'center'}}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:8, height:8, borderRadius:'50%', background:'#94a3b8',
+            animation:`blink 1.2s ${i*.22}s ease-in-out infinite`
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   App
+═══════════════════════════════════════════ */
+function App() {
+  // Patient form
+  const [name, setName]       = useState('');
+  const [age, setAge]         = useState(30);
+  const [gender, setGender]   = useState('Male');
+  const [symptoms, setSymptoms] = useState('');
+  const [imgFile, setImgFile] = useState(null);
+  const [audFile, setAudFile] = useState(null);
+
+  // Results
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  // Chat
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatInput, setChatInput]     = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [context, setContext]         = useState('');
+
+  // API health
+  const [apiReady, setApiReady] = useState(null);
+
+  const imgRef   = useRef(null);
+  const audRef   = useRef(null);
+  const chatEnd  = useRef(null);
+
+  useEffect(() => { api.health().then(d => setApiReady(d.api_configured)).catch(() => setApiReady(false)); }, []);
+  useEffect(() => { chatEnd.current?.scrollIntoView({ behavior:'smooth' }); }, [chatHistory, chatLoading]);
+
+  /* ── Analyze ── */
+  const handleAnalyze = async () => {
+    if (!name.trim())           return setError('Patient name is required.');
+    if (symptoms.length < 10)   return setError('Please describe symptoms in more detail.');
+    setError(''); setLoading(true); setResults(null);
+    const fd = new FormData();
+    fd.append('symptoms', symptoms);
+    fd.append('patient_name', name);
+    fd.append('patient_age', age);
+    fd.append('patient_gender', gender);
+    if (imgFile) fd.append('image', imgFile);
+    if (audFile) fd.append('audio', audFile);
+    try {
+      const data = await api.analyze(fd);
+      setResults(data);
+      setContext(data.plain_summary || '');
+    } catch(e) {
+      setError(e.message || 'Analysis failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ── Chat ── */
+  const handleChat = async () => {
+    const q = chatInput.trim();
+    if (!q || chatLoading) return;
+    setChatInput('');
+    const newHistory = [...chatHistory, { role:'user', content:q }];
+    setChatHistory(newHistory);
+    setChatLoading(true);
+    try {
+      const pairs = [];
+      for (let i = 0; i < chatHistory.length - 1; i += 2) {
+        if (chatHistory[i]?.role === 'user' && chatHistory[i+1]?.role === 'bot') {
+          pairs.push([chatHistory[i].content, chatHistory[i+1].content]);
+        }
+      }
+      const data = await api.chat({ question:q, history:pairs, patient_name:name||'Patient', analysis_context:context });
+      setChatHistory([...newHistory, { role:'bot', content:data.response }]);
+    } catch(e) {
+      setChatHistory([...newHistory, { role:'bot', content:`❌ ${e.message}` }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const onChatKey = e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleChat();} };
+
+  /* ── Example cases ── */
+  const examples = [
+    { n:'John Smith',    a:45, g:'Male',   s:'Severe chest pain radiating to left arm, shortness of breath and sweating for the past 2 hours.' },
+    { n:'Sarah Johnson', a:32, g:'Female', s:'Persistent headache for a week, blurred vision and numbness in my fingers.' },
+    { n:'Michael Davis', a:28, g:'Male',   s:'Dark mole on my back growing and changing colour for a month, irregular shape, sometimes itches.' },
+    { n:'Linda Martinez',a:55, g:'Female', s:'Irregular heartbeat, chest fluttering, dizziness when standing up quickly for several days.' },
+  ];
+
+  /* ─────────────────────────────────────── RENDER ── */
+  return (
+    <div style={{minHeight:'100vh', display:'flex', flexDirection:'column'}}>
+
+      {/* ══ Navbar ══ */}
+      <nav style={{
+        position:'sticky', top:0, zIndex:100,
+        background:'rgba(255,255,255,.95)', backdropFilter:'blur(14px)',
+        borderBottom:'1px solid #e2e8f0',
+        padding:'0 28px', height:62,
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        boxShadow:'0 2px 12px rgba(0,0,0,.06)'
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <div style={{background:'linear-gradient(135deg,#1d4ed8,#0891b2)', borderRadius:10, padding:'8px 10px', fontSize:'1.25rem'}}>🏥</div>
+          <div>
+            <div style={{fontWeight:900, fontSize:'.95rem', color:'#1e293b', lineHeight:1}}>HealthAI</div>
+            <div style={{fontSize:'.62rem', color:'#94a3b8', fontWeight:500}}>Specialist AI Assistant</div>
+          </div>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <div style={{
+            width:8, height:8, borderRadius:'50%',
+            background: apiReady===null?'#f59e0b':apiReady?'#22c55e':'#ef4444',
+            boxShadow:`0 0 0 3px ${apiReady===null?'#fef9c344':apiReady?'#dcfce744':'#fee2e244'}`
+          }}/>
+          <span style={{fontSize:'.77rem', fontWeight:600, color:'#64748b'}}>
+            {apiReady===null?'Connecting…':apiReady?'System Ready':'API Key Missing'}
+          </span>
+        </div>
+      </nav>
+
+      {/* ══ Hero ══ */}
+      <div className="hero-bg" style={{padding:'44px 28px', textAlign:'center', position:'relative', overflow:'hidden'}}>
+        <div style={{position:'absolute',top:-50,right:-50,width:200,height:200,background:'rgba(255,255,255,.05)',borderRadius:'50%'}}/>
+        <div style={{position:'absolute',bottom:-70,left:-30,width:180,height:180,background:'rgba(255,255,255,.04)',borderRadius:'50%'}}/>
+        <div style={{position:'relative', zIndex:1}}>
+          <div style={{
+            display:'inline-block', background:'rgba(255,255,255,.12)', backdropFilter:'blur(8px)',
+            border:'1px solid rgba(255,255,255,.2)', borderRadius:20,
+            padding:'5px 16px', marginBottom:16,
+            fontSize:'.75rem', color:'rgba(255,255,255,.9)', fontWeight:700, letterSpacing:'.4px'
+          }}>✨ AI-Powered Medical Analysis</div>
+
+          <h1 style={{color:'#fff', fontWeight:900, fontSize:'clamp(1.5rem,4vw,2.4rem)', margin:'0 0 12px', letterSpacing:'-.5px', lineHeight:1.2}}>
+            Your Personal Healthcare<br/>
+            <span style={{background:'linear-gradient(135deg,#7dd3fc,#a5f3fc)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent'}}>
+              AI Specialist Team
+            </span>
+          </h1>
+          <p style={{color:'rgba(255,255,255,.72)', fontSize:'.95rem', maxWidth:460, margin:'0 auto 26px', lineHeight:1.65}}>
+            Describe your symptoms and get instant multi-specialist AI analysis in seconds
+          </p>
+          <div style={{display:'flex', justifyContent:'center', gap:36, flexWrap:'wrap'}}>
+            {[['4','AI Specialists'],['3','Input Modes'],['<30s','Analysis Time']].map(([n,l]) => (
+              <div key={l} style={{textAlign:'center'}}>
+                <div style={{fontWeight:900, fontSize:'1.4rem', color:'#fff', lineHeight:1}}>{n}</div>
+                <div style={{fontSize:'.68rem', color:'rgba(255,255,255,.6)', marginTop:4, fontWeight:600, textTransform:'uppercase', letterSpacing:'.5px'}}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ══ Main grid ══ */}
+      <div className="main-grid" style={{
+        maxWidth:1300, margin:'0 auto', padding:'24px 20px', flex:1,
+        display:'grid', gridTemplateColumns:'minmax(300px,2fr) minmax(380px,3fr)',
+        gap:20, alignItems:'start'
+      }}>
+
+        {/* ── LEFT: Input ── */}
+        <div style={{display:'flex', flexDirection:'column', gap:14}}>
+
+          {/* Patient info */}
+          <div className="card" style={{padding:'20px 24px'}}>
+            <div style={{fontWeight:800, fontSize:'.82rem', color:'#1e293b', marginBottom:16,
+                         display:'flex', alignItems:'center', gap:8}}>
+              <span style={{background:'#eff6ff', borderRadius:8, padding:'4px 10px', color:'#1d4ed8'}}>👤 Patient Info</span>
+            </div>
+
+            <label style={{fontSize:'.72rem', fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'.4px', display:'block', marginBottom:6}}>Full Name</label>
+            <input className="inp" style={{marginBottom:14}} type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. John Smith" />
+
+            <label style={{fontSize:'.72rem', fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'.4px', display:'flex', justifyContent:'space-between', marginBottom:6}}>
+              <span>Age</span><span style={{color:'#1d4ed8', fontWeight:900}}>{age}</span>
+            </label>
+            <input type="range" min={1} max={120} step={1} value={age} onChange={e=>setAge(+e.target.value)}
+              style={{width:'100%', accentColor:'#1d4ed8', marginBottom:4}} />
+            <div style={{display:'flex', justifyContent:'space-between', fontSize:'.65rem', color:'#cbd5e1', marginBottom:14}}>
+              <span>1</span><span>120</span>
+            </div>
+
+            <label style={{fontSize:'.72rem', fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'.4px', display:'block', marginBottom:8}}>Gender</label>
+            <div style={{display:'flex', gap:7, flexWrap:'wrap'}}>
+              {['Male','Female','Non-binary','Prefer not to say'].map(g => (
+                <button key={g} className={`gpill ${gender===g?'active':''}`} onClick={()=>setGender(g)}>{g}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Symptoms */}
+          <div className="card" style={{padding:'20px 24px'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14}}>
+              <span style={{background:'#f0fdf4', borderRadius:8, padding:'4px 10px', color:'#16a34a', fontWeight:800, fontSize:'.82rem'}}>🩺 Symptoms</span>
+              <span style={{fontSize:'.7rem', color:'#94a3b8', fontWeight:500}}>{symptoms.length} chars</span>
+            </div>
+            <textarea className="inp" rows={5} value={symptoms} onChange={e=>setSymptoms(e.target.value)}
+              placeholder={"Describe your symptoms in detail…\ne.g. 'Severe headache for 3 days with nausea and light sensitivity.'"}
+              style={{resize:'vertical', minHeight:110}} />
+          </div>
+
+          {/* Attachments */}
+          <div className="card" style={{padding:'20px 24px'}}>
+            <div style={{fontWeight:800, fontSize:'.82rem', color:'#1e293b', marginBottom:14}}>
+              <span style={{background:'#fdf4ff', borderRadius:8, padding:'4px 10px', color:'#7c3aed'}}>📎 Attachments (Optional)</span>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+              <div className="upload-zone" onClick={()=>imgRef.current?.click()}>
+                <input ref={imgRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>setImgFile(e.target.files[0]||null)} />
+                {imgFile ? (
+                  <><div style={{fontSize:'1.4rem', marginBottom:4}}>🖼️</div>
+                  <div style={{fontSize:'.7rem', fontWeight:700, color:'#1d4ed8', wordBreak:'break-all'}}>{imgFile.name}</div>
+                  <div style={{fontSize:'.62rem', color:'#94a3b8', marginTop:2}}>{(imgFile.size/1024).toFixed(1)} KB</div></>
+                ) : (
+                  <><div style={{fontSize:'1.4rem', opacity:.4, marginBottom:4}}>🖼️</div>
+                  <div style={{fontSize:'.75rem', fontWeight:700, color:'#64748b'}}>Medical Image</div>
+                  <div style={{fontSize:'.65rem', color:'#94a3b8', marginTop:2}}>JPG, PNG…</div></>
+                )}
+              </div>
+              <div className="upload-zone" onClick={()=>audRef.current?.click()}>
+                <input ref={audRef} type="file" accept="audio/*" style={{display:'none'}} onChange={e=>setAudFile(e.target.files[0]||null)} />
+                {audFile ? (
+                  <><div style={{fontSize:'1.4rem', marginBottom:4}}>🎤</div>
+                  <div style={{fontSize:'.7rem', fontWeight:700, color:'#1d4ed8', wordBreak:'break-all'}}>{audFile.name}</div>
+                  <div style={{fontSize:'.62rem', color:'#94a3b8', marginTop:2}}>{(audFile.size/1024).toFixed(1)} KB</div></>
+                ) : (
+                  <><div style={{fontSize:'1.4rem', opacity:.4, marginBottom:4}}>🎤</div>
+                  <div style={{fontSize:'.75rem', fontWeight:700, color:'#64748b'}}>Voice Recording</div>
+                  <div style={{fontSize:'.65rem', color:'#94a3b8', marginTop:2}}>MP3, WAV…</div></>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:10, padding:'12px 16px', color:'#dc2626', fontSize:'.85rem', fontWeight:500}}>
+              ❌ {error}
+            </div>
+          )}
+
+          {/* Analyze button */}
+          <button className="btn-analyze" onClick={handleAnalyze} disabled={loading}>
+            {loading ? (
+              <span style={{display:'flex', alignItems:'center', justifyContent:'center', gap:10}}>
+                <span className="anim-spin" style={{display:'inline-block', width:18, height:18, border:'3px solid rgba(255,255,255,.3)', borderTopColor:'#fff', borderRadius:'50%'}}/>
+                Analyzing with 4 Specialists…
+              </span>
+            ) : '🔬  Analyze with AI Specialists'}
+          </button>
+
+          {/* Examples */}
+          <div className="card" style={{padding:'16px 20px'}}>
+            <div style={{fontSize:'.7rem', fontWeight:700, color:'#94a3b8', marginBottom:10, textTransform:'uppercase', letterSpacing:'.4px'}}>💡 Quick Examples</div>
+            {examples.map((ex,i) => (
+              <button key={i} onClick={()=>{setName(ex.n);setAge(ex.a);setGender(ex.g);setSymptoms(ex.s);}}
+                style={{
+                  width:'100%', marginBottom:6, background:'#f8faff', border:'1px solid #e2e8f0',
+                  borderRadius:8, padding:'9px 12px', cursor:'pointer', textAlign:'left',
+                  fontSize:'.78rem', color:'#374151', lineHeight:1.45, transition:'all .2s'
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.background='#eff6ff';e.currentTarget.style.borderColor='#bfdbfe';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='#f8faff';e.currentTarget.style.borderColor='#e2e8f0';}}
+              >
+                <span style={{fontWeight:700, color:'#1d4ed8'}}>{ex.n} ({ex.a})</span>
+                {' — '}{ex.s.substring(0,65)}…
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── RIGHT: Results ── */}
+        <ResultsPanel results={results} loading={loading} />
+      </div>
+
+      {/* ══ Chat ══ */}
+      <div style={{maxWidth:1300, margin:'0 auto', padding:'0 20px 32px', width:'100%'}}>
+        <div className="card" style={{overflow:'hidden'}}>
+          {/* Chat header */}
+          <div style={{background:'linear-gradient(135deg,#f8faff,#eff6ff)', borderBottom:'1px solid #e2e8f0', padding:'16px 24px', display:'flex', alignItems:'center', gap:12}}>
+            <div style={{background:'linear-gradient(135deg,#1d4ed8,#0891b2)', borderRadius:10, padding:'8px', fontSize:'1.05rem'}}>💬</div>
+            <div style={{flex:1}}>
+              <h3 style={{margin:0, fontWeight:800, fontSize:'.9rem', color:'#1e293b'}}>AI Health Assistant Chat</h3>
+              <p style={{margin:0, fontSize:'.73rem', color:'#94a3b8'}}>{context?'Context-aware — responses based on your analysis':'Ask general health questions'}</p>
+            </div>
+            {context && (
+              <div style={{background:'#dcfce7', border:'1px solid #86efac', borderRadius:20, padding:'4px 12px', fontSize:'.7rem', fontWeight:700, color:'#16a34a'}}>
+                ✓ Analysis Loaded
+              </div>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div style={{minHeight:180, maxHeight:380, overflowY:'auto', padding:'20px 24px', background:'#fafbff'}}>
+            {chatHistory.length===0 && !chatLoading ? (
+              <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:160, color:'#94a3b8'}}>
+                <div style={{fontSize:'2.2rem', opacity:.3, marginBottom:10}}>💬</div>
+                <p style={{fontWeight:700, margin:'0 0 4px', fontSize:'.9rem'}}>Start a Conversation</p>
+                <p style={{fontSize:'.78rem', color:'#cbd5e1', margin:0}}>
+                  {context ? 'Ask about your analysis results' : 'Ask a health question'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {chatHistory.map((m,i) => <ChatMessage key={i} role={m.role} content={m.content} />)}
+                {chatLoading && <TypingDots />}
+                <div ref={chatEnd} />
+              </>
+            )}
+          </div>
+
+          {/* Input */}
+          <div style={{borderTop:'1px solid #e2e8f0', padding:'14px 24px', background:'#fff', display:'flex', gap:10, alignItems:'flex-end'}}>
+            <textarea className="inp" rows={2} value={chatInput}
+              onChange={e=>setChatInput(e.target.value)} onKeyDown={onChatKey}
+              placeholder="Ask about your results, medications, lifestyle changes… (Enter to send)"
+              style={{flex:1, resize:'none', minHeight:52}}
+              disabled={chatLoading}
+            />
+            <button className="btn-send"
+              onClick={handleChat}
+              disabled={chatLoading||!chatInput.trim()}
+              style={{
+                background: chatLoading||!chatInput.trim() ? '#e2e8f0' : 'linear-gradient(135deg,#0891b2,#0e7490)',
+                color: chatLoading||!chatInput.trim() ? '#94a3b8' : '#fff',
+                boxShadow: chatLoading||!chatInput.trim() ? 'none' : '0 4px 14px rgba(8,145,178,.35)',
+              }}
+            >↑</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ══ Footer ══ */}
+      <footer style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)', padding:'26px 28px', display:'flex', flexWrap:'wrap', gap:20, alignItems:'center', justifyContent:'space-between'}}>
+        <div>
+          <div style={{color:'#fff', fontWeight:900, fontSize:'.9rem', marginBottom:4}}>🏥 HealthAI Assistant</div>
+          <div style={{color:'rgba(255,255,255,.45)', fontSize:'.72rem'}}>Powered by OpenAI GPT-4o-mini · 4 Specialist Agents</div>
+        </div>
+        <div style={{display:'flex', gap:28}}>
+          {[['4','Specialists'],['3','Input Modes'],['∞','Chat Memory']].map(([n,l]) => (
+            <div key={l} style={{textAlign:'center'}}>
+              <div style={{fontWeight:900, fontSize:'1.2rem', color:'#60a5fa'}}>{n}</div>
+              <div style={{fontSize:'.62rem', color:'rgba(255,255,255,.35)', textTransform:'uppercase', letterSpacing:'.5px'}}>{l}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{color:'rgba(255,255,255,.3)', fontSize:'.7rem', textAlign:'right'}}>Version 3.0 · Educational Use Only<br/>No medical data stored</div>
+      </footer>
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
