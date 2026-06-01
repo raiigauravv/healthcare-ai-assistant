@@ -380,8 +380,10 @@ class AgentCoordinator:
 
         # Encode image once, reuse for all specialists
         img_b64 = self._pil_to_b64(image_data) if image_data is not None else None
-        if img_b64:
-            logger.info("Image encoded for GPT-4o Vision — all specialists will examine it.")
+        if image_data is not None and img_b64 is None:
+            logger.error("Image was provided but base64 encoding FAILED — specialists will not see the image.")
+        elif img_b64:
+            logger.info(f"Image encoded OK ({len(img_b64)//1024}KB b64) — all 4 specialists will examine it via GPT-4o Vision.")
 
         patient_line = (
             f"Patient: {patient_context.get('name', 'Patient')}, "

@@ -2,6 +2,7 @@
 Healthcare AI Assistant — FastAPI backend
 Serves React SPA on / and AI endpoints on /api/*
 """
+import io
 import os
 import tempfile
 import logging
@@ -11,6 +12,7 @@ from typing import List, Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
@@ -91,19 +93,29 @@ async def analyze(
     tmp_files: list[str] = []
 
     try:
+        # ── Image: load directly from bytes (avoids unflushed-temp-file bug) ─
         if image and image.filename:
-            suffix = os.path.splitext(image.filename)[1] or ".jpg"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-                f.write(await image.read())
-                tmp_files.append(f.name)
-                image_data = ingest_image(f.name)
+            try:
+                img_bytes = await image.read()
+                image_data = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+                logger.info(
+                    f"Image loaded OK: {image_data.size}px, "
+                    f"{len(img_bytes)//1024}KB, filename='{image.filename}'"
+                )
+            except Exception as exc:
+                logger.warning(f"Image load failed ('{image.filename}'): {exc}")
+                image_data = None
 
+        # ── Audio: write to temp file, flush before Whisper reads it ─────────
         if audio and audio.filename:
             suffix = os.path.splitext(audio.filename)[1] or ".wav"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 f.write(await audio.read())
+                f.flush()          # flush Python buffer → OS before closing
                 tmp_files.append(f.name)
-                audio_data = ingest_audio(f.name)
+            # File is now closed & fully on disk — safe to read
+            audio_data = ingest_audio(tmp_files[-1])
+            logger.info(f"Audio ingested: {tmp_files[-1]}, data={audio_data is not None}")
 
         processed = preprocess_text(ingest_text(symptoms))
 
@@ -129,7 +141,12 @@ async def analyze(
             "has_audio": audio_data is not None,
         }
 
-        # image_data (PIL Image) is passed to each specialist who will see it via GPT-4o Vision
+        logger.info(
+            f"Sending to agents — image: {image_data is not None} "
+            f"({f'{image_data.size}' if image_data else 'none'}), "
+            f"audio: {audio_data is not None}"
+        )
+        # image_data (PIL Image) is passed to each specialist via GPT-4o Vision
         results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_data, audio_data)
         gp     = results.get("General Physician", {})
         cardio = results.get("Cardiologist", {})
