@@ -1,25 +1,14 @@
 """
-Healthcare AI Assistant - Gemini REST API (no SDK, avoids websockets conflict)
+Healthcare AI Assistant - OpenAI Integration
 """
 
 import os
 import logging
-import requests
 from typing import Dict, Any
+from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# (base, model) pairs tried in order until one succeeds
-_GEMINI_CANDIDATES = [
-    ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash"),
-    ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-flash"),
-    ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash-latest"),
-    ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-pro"),
-    ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-pro"),
-    ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-2.0-flash"),
-    ("https://generativelanguage.googleapis.com/v1/models",     "gemini-2.0-flash"),
-]
 
 DISCLAIMER = (
     "You are an AI healthcare assistant for educational purposes only. "
@@ -27,84 +16,35 @@ DISCLAIMER = (
     "Always recommend professional medical consultation."
 )
 
-
-def _sanitize_error(e: Exception) -> str:
-    """Return a safe error string with no API key or URL."""
-    msg = str(e)
-    # Strip anything that looks like a URL containing a key= param
-    import re
-    msg = re.sub(r"https?://[^\s]*key=[^\s]*", "<Gemini API>", msg)
-    return msg
-
-
-def _is_bearer_token(api_key: str) -> bool:
-    """Keys starting with AIzaSy are query-param API keys; anything else is a Bearer token."""
-    return not api_key.startswith("AIzaSy")
-
-
-def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": 0.4,
-        },
-    }
-    use_bearer = _is_bearer_token(api_key)
-    last_err = None
-    for base, model in _GEMINI_CANDIDATES:
-        try:
-            if use_bearer:
-                url = f"{base}/{model}:generateContent"
-                headers = {"Authorization": f"Bearer {api_key}"}
-                resp = requests.post(url, json=payload, headers=headers, timeout=30)
-            else:
-                url = f"{base}/{model}:generateContent?key={api_key}"
-                resp = requests.post(url, json=payload, timeout=30)
-
-            if resp.status_code in (404, 400):
-                last_err = f"{model} → HTTP {resp.status_code}"
-                continue
-            if resp.status_code == 401:
-                raise RuntimeError(
-                    "API key is invalid or expired. "
-                    "Get a fresh key from aistudio.google.com → 'Get API key'."
-                )
-            resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except requests.exceptions.HTTPError as e:
-            code = e.response.status_code if e.response is not None else "?"
-            if code in (404, 400):
-                last_err = f"{model} → HTTP {code}"
-                continue
-            raise
-    # All candidates failed
-    raise RuntimeError(
-        "No Gemini model responded. "
-        "Make sure GEMINI_API_KEY is a valid key from aistudio.google.com "
-        "(should start with 'AIzaSy...'). "
-        f"Last error: {last_err}"
-    )
+_MODEL = "gpt-4o-mini"
 
 
 class OpenAIHealthcareAssistant:
-    """Gemini-powered healthcare assistant (class name kept for app.py compatibility)."""
+    """OpenAI-powered healthcare assistant."""
 
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            logger.warning("GEMINI_API_KEY not found. Using mock responses.")
+            logger.warning("OPENAI_API_KEY not found. Using mock responses.")
             self.mock_mode = True
+            self.client = None
         else:
             self.mock_mode = False
-            logger.info("Gemini API key loaded successfully")
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info("OpenAI client initialized successfully")
 
     def _call(self, prompt: str, max_tokens: int = 800) -> str:
-        return _call_gemini(prompt, self.api_key, max_tokens)
+        response = self.client.chat.completions.create(
+            model=_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=0.4,
+        )
+        return response.choices[0].message.content
 
     def analyze_medical_image(self, image_path: str, symptoms: str) -> str:
         if self.mock_mode:
-            return f"Mock image analysis. Add GEMINI_API_KEY to enable real analysis."
+            return "Mock image analysis. Add OPENAI_API_KEY to enable real analysis."
         try:
             prompt = (
                 f"{DISCLAIMER}\n\nPatient symptoms: {symptoms}\n\n"
@@ -117,7 +57,7 @@ class OpenAIHealthcareAssistant:
             return self._call(prompt, 500)
         except Exception as e:
             logger.error(f"Image analysis error: {e}")
-            return f"Image analysis unavailable: {_sanitize_error(e)}"
+            return "Image analysis unavailable. Please try again."
 
     def analyze_audio_symptoms(self, audio_path: str, symptoms: str) -> str:
         return "Audio recorded. Include any additional details in your symptom description."
@@ -160,19 +100,19 @@ class OpenAIHealthcareAssistant:
         except Exception as e:
             logger.error(f"Analysis error: {e}")
             return {
-                "analysis": f"Analysis unavailable: {_sanitize_error(e)}",
+                "analysis": "Analysis unavailable. Please try again.",
                 "recommendations": "Please consult a healthcare professional.",
                 "confidence": 0.0,
             }
 
     def get_health_recommendation(self, context: str) -> str:
         if self.mock_mode:
-            return "Demo mode — add GEMINI_API_KEY secret in HF Space settings."
+            return "Demo mode — add OPENAI_API_KEY secret in HF Space settings."
         try:
             return self._call(f"{DISCLAIMER}\n\nPatient question: {context}", 300)
         except Exception as e:
             logger.error(f"Recommendation error: {e}")
-            return f"Unable to process your question: {_sanitize_error(e)}"
+            return "Unable to process your question. Please try again later."
 
     def _parse(self, text: str) -> Dict[str, Any]:
         lines = [l.strip() for l in text.split("\n") if l.strip()]
@@ -188,7 +128,7 @@ class OpenAIHealthcareAssistant:
             "analysis": (
                 f"Demo Mode — {age}-year-old {gender}\n"
                 f"Symptoms: {symptoms[:100]}\n\n"
-                "Add GEMINI_API_KEY secret in HF Space settings for real AI analysis."
+                "Add OPENAI_API_KEY secret in HF Space settings for real AI analysis."
             ),
             "recommendations": (
                 "• Schedule consultation with a healthcare provider\n"

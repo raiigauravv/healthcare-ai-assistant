@@ -37,14 +37,14 @@ logger = logging.getLogger(__name__)
 
 print(f"===== Application Startup at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
 
-# Check for Gemini API key
-openai_api_key = os.getenv('GEMINI_API_KEY')
+# Check for OpenAI API key
+openai_api_key = os.getenv('OPENAI_API_KEY')
 if not openai_api_key:
-    logger.error("GEMINI_API_KEY not found in environment variables")
+    logger.error("OPENAI_API_KEY not found in environment variables")
     API_KEY_MISSING = True
 else:
     API_KEY_MISSING = False
-    logger.info("Gemini API key found")
+    logger.info("OpenAI API key found")
 
 # Initialize OpenAI assistant and Agent Coordinator
 try:

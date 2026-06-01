@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 import logging
 from PIL import Image
 from dotenv import load_dotenv
-import requests
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -337,7 +337,9 @@ SPECIALISTS = {
 
 
 class AgentCoordinator:
-    """Coordinates multiple agents and manages the overall analysis workflow"""
+    """Coordinates multiple specialist agents using OpenAI."""
+
+    _MODEL = "gpt-4o-mini"
 
     def __init__(self):
         self.triage_agent = TriageAgent()
@@ -345,16 +347,17 @@ class AgentCoordinator:
         self.general_practice_agent = GeneralPracticeAgent()
         self.followup_agent = FollowUpAgent()
 
-        self._api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY")
+        self._client = OpenAI(api_key=api_key) if api_key else None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
         """Synchronous analysis by all 4 specialist agents."""
-        if not self._api_key:
+        if not self._client:
             return {
                 name: {
-                    "analysis": "GEMINI_API_KEY not configured.",
-                    "recommendations": "Add GEMINI_API_KEY as a secret in HF Space settings.",
+                    "analysis": "OPENAI_API_KEY not configured.",
+                    "recommendations": "Add OPENAI_API_KEY as a secret in HF Space settings.",
                     "confidence_score": 0.0,
                 }
                 for name in SPECIALISTS
@@ -372,55 +375,6 @@ class AgentCoordinator:
             results[name] = self._call_specialist(name, role, patient_line)
         return results
 
-    _GEMINI_CANDIDATES = [
-        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash"),
-        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-flash"),
-        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash-latest"),
-        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-pro"),
-        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-pro"),
-        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-2.0-flash"),
-        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-2.0-flash"),
-    ]
-
-    def _gemini_post(self, prompt: str, max_tokens: int = 600) -> str:
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
-        }
-        use_bearer = not self._api_key.startswith("AIzaSy")
-        last_err = None
-        for base, model in self._GEMINI_CANDIDATES:
-            try:
-                if use_bearer:
-                    url = f"{base}/{model}:generateContent"
-                    headers = {"Authorization": f"Bearer {self._api_key}"}
-                    resp = requests.post(url, json=payload, headers=headers, timeout=30)
-                else:
-                    url = f"{base}/{model}:generateContent?key={self._api_key}"
-                    resp = requests.post(url, json=payload, timeout=30)
-
-                if resp.status_code in (404, 400):
-                    last_err = f"{model} → HTTP {resp.status_code}"
-                    continue
-                if resp.status_code == 401:
-                    raise RuntimeError(
-                        "API key is invalid or expired. "
-                        "Get a fresh key from aistudio.google.com → 'Get API key'."
-                    )
-                resp.raise_for_status()
-                return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            except requests.exceptions.HTTPError as e:
-                code = e.response.status_code if e.response is not None else "?"
-                if code in (404, 400):
-                    last_err = f"{model} → HTTP {code}"
-                    continue
-                raise
-        raise RuntimeError(
-            "No Gemini model responded. "
-            "Make sure GEMINI_API_KEY starts with 'AIzaSy' (from aistudio.google.com). "
-            f"Last error: {last_err}"
-        )
-
     def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
         try:
             prompt = (
@@ -432,7 +386,13 @@ class AgentCoordinator:
                 f"{patient_line}\n\n"
                 f"This is for educational purposes only. Always recommend professional medical consultation."
             )
-            text = self._gemini_post(prompt, 600)
+            response = self._client.chat.completions.create(
+                model=self._MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            text = response.choices[0].message.content.strip()
             lines = text.split("\n")
             mid = max(1, len(lines) // 2)
             return {
@@ -441,11 +401,9 @@ class AgentCoordinator:
                 "confidence_score": 0.82,
             }
         except Exception as e:
-            import re
-            safe_err = re.sub(r"https?://[^\s]*key=[^\s]*", "<Gemini API>", str(e))
             logger.error(f"{name} agent error: {e}")
             return {
-                "analysis": f"Error during {name} analysis: {safe_err}",
+                "analysis": f"Error during {name} analysis. Please try again.",
                 "recommendations": "Please consult a healthcare professional.",
                 "confidence_score": 0.0,
             }
