@@ -64,6 +64,55 @@ class ChatRequest(BaseModel):
 
 # ── API routes ───────────────────────────────────────────────────────────────
 
+@app.get("/api/debug-vision")
+async def debug_vision():
+    """
+    No upload needed. Generates a test image in memory, runs it through the
+    EXACT same _call_specialist code path used during analysis, and returns
+    the raw response. Tells us definitively if the agents pipeline works.
+    """
+    if not READY or healthcare_ai.mock_mode:
+        raise HTTPException(503, "OpenAI API key not configured")
+    try:
+        # Build a small but non-trivial test image
+        img = Image.new("RGB", (200, 200), color=(220, 100, 80))
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([40, 40, 160, 160], fill=(80, 180, 80))
+        draw.ellipse([70, 70, 130, 130], fill=(60, 100, 220))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        raw = buf.getvalue()
+        img_b64 = base64.b64encode(raw).decode("utf-8")
+        img_mime = "image/jpeg"
+
+        logger.info(f"debug-vision: generated {len(raw)} byte JPEG, b64={len(img_b64)} chars")
+
+        # Call _call_specialist directly — same path as /api/analyze
+        result = agent_coordinator._call_specialist(
+            "General Physician",
+            "an experienced family medicine physician",
+            "Patient: Test, 30 year old Male.\nSymptoms: test symptoms",
+            img_b64,
+            img_mime,
+        )
+
+        return {
+            "ok": True,
+            "image_bytes": len(raw),
+            "b64_chars": len(img_b64),
+            "mime": img_mime,
+            "data_url_prefix": f"data:{img_mime};base64,{img_b64[:20]}...",
+            "specialist_saw_image": "unable to view" not in result.get("analysis","").lower(),
+            "analysis_snippet": result.get("analysis","")[:200],
+            "client_initialized": agent_coordinator._client is not None,
+            "model": agent_coordinator._MODEL,
+        }
+    except Exception as exc:
+        logger.error(f"debug-vision error: {exc}", exc_info=True)
+        return {"error": str(exc)}
+
+
 @app.post("/api/test-vision")
 async def test_vision(image: UploadFile = File(...)):
     """
