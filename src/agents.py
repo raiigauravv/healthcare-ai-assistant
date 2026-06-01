@@ -372,6 +372,43 @@ class AgentCoordinator:
             results[name] = self._call_specialist(name, role, patient_line)
         return results
 
+    _MODELS = [
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash-001",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro",
+    ]
+    _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    def _gemini_post(self, prompt: str, max_tokens: int = 600) -> str:
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
+        }
+        last_err = None
+        for model in self._MODELS:
+            try:
+                resp = requests.post(
+                    f"{self._GEMINI_BASE}/{model}:generateContent?key={self._api_key}",
+                    json=payload,
+                    timeout=30,
+                )
+                if resp.status_code == 404:
+                    last_err = f"model {model} not found"
+                    continue
+                resp.raise_for_status()
+                return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    last_err = f"model {model} not found"
+                    continue
+                raise
+        raise RuntimeError(
+            f"No Gemini model accessible. Check GEMINI_API_KEY has 'Generative Language API' "
+            f"enabled at aistudio.google.com. ({last_err})"
+        )
+
     def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
         try:
             prompt = (
@@ -383,17 +420,7 @@ class AgentCoordinator:
                 f"{patient_line}\n\n"
                 f"This is for educational purposes only. Always recommend professional medical consultation."
             )
-            resp = requests.post(
-                "https://generativelanguage.googleapis.com/v1beta"
-                f"/models/gemini-1.5-flash:generateContent?key={self._api_key}",
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"maxOutputTokens": 600, "temperature": 0.4},
-                },
-                timeout=30,
-            )
-            resp.raise_for_status()
-            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            text = self._gemini_post(prompt, 600)
             lines = text.split("\n")
             mid = max(1, len(lines) // 2)
             return {

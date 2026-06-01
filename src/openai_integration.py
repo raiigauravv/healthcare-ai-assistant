@@ -10,10 +10,14 @@ from typing import Dict, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-_GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta"
-    "/models/gemini-1.5-flash:generateContent"
-)
+_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+_GEMINI_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro",
+]
 
 DISCLAIMER = (
     "You are an AI healthcare assistant for educational purposes only. "
@@ -32,19 +36,37 @@ def _sanitize_error(e: Exception) -> str:
 
 
 def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
-    resp = requests.post(
-        f"{_GEMINI_URL}?key={api_key}",
-        json={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-                "temperature": 0.4,
-            },
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.4,
         },
-        timeout=30,
+    }
+    last_err = None
+    for model in _GEMINI_MODELS:
+        try:
+            resp = requests.post(
+                f"{_GEMINI_BASE}/{model}:generateContent?key={api_key}",
+                json=payload,
+                timeout=30,
+            )
+            if resp.status_code == 404:
+                last_err = f"Model {model} not found"
+                continue
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                last_err = f"Model {model} not found"
+                continue
+            raise
+    # All models failed
+    raise RuntimeError(
+        f"No Gemini model is accessible with your API key. "
+        f"Please verify your GEMINI_API_KEY has the 'Generative Language API' enabled "
+        f"in Google AI Studio (aistudio.google.com). Last error: {last_err}"
     )
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 class OpenAIHealthcareAssistant:
