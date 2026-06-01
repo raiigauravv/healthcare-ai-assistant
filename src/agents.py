@@ -411,9 +411,10 @@ class AgentCoordinator:
             )
             if img_b64:
                 prompt += (
-                    "A medical image has been uploaded by the patient. "
-                    "Please examine it carefully and incorporate your visual findings "
-                    "into the analysis. Describe specific visual details you observe.\n\n"
+                    "The patient has also shared a photograph. "
+                    "Look at the image and describe what you can observe — "
+                    "note colours, textures, shapes, or any visible changes — "
+                    "then relate those observations to the symptoms above.\n\n"
                 )
             prompt += "This is for educational purposes only. Always recommend professional medical consultation."
 
