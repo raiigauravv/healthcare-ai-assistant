@@ -77,12 +77,12 @@ async def test_vision(image: UploadFile = File(...)):
         if not raw:
             return {"error": "0 bytes received — upload failed"}
 
-        pil = Image.open(io.BytesIO(raw)).convert("RGB")
-        buf = io.BytesIO()
-        pil.save(buf, format="JPEG", quality=85)
-        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        ext  = os.path.splitext(image.filename)[1].lower().lstrip(".")
+        mime = {"jpg":"image/jpeg","jpeg":"image/jpeg","png":"image/png",
+                "webp":"image/webp","gif":"image/gif"}.get(ext, "image/jpeg")
+        img_b64 = base64.b64encode(raw).decode("utf-8")
 
-        logger.info(f"test-vision: {pil.size}px  orig={len(raw)//1024}KB  b64={len(img_b64)//1024}KB")
+        logger.info(f"test-vision: {len(raw)//1024}KB raw  {len(img_b64)//1024}KB b64  mime={mime}")
 
         resp = healthcare_ai.client.chat.completions.create(
             model="gpt-4o",
@@ -91,8 +91,8 @@ async def test_vision(image: UploadFile = File(...)):
                 "content": [
                     {"type": "text", "text": "Describe exactly what you see in this image in 2-3 sentences."},
                     {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{img_b64}",
-                        "detail": "low",   # cheap/fast for a test
+                        "url": f"data:{mime};base64,{img_b64}",
+                        "detail": "low",
                     }},
                 ],
             }],
@@ -100,9 +100,9 @@ async def test_vision(image: UploadFile = File(...)):
         )
         return {
             "ok": True,
-            "image_size": list(pil.size),
             "original_kb": len(raw) // 1024,
             "b64_kb": len(img_b64) // 1024,
+            "mime": mime,
             "gpt4o_says": resp.choices[0].message.content,
         }
     except Exception as exc:
@@ -136,32 +136,34 @@ async def analyze(
     if len(patient_name.strip()) < 2:
         raise HTTPException(400, "Patient name required")
 
-    image_b64: str | None = None   # pre-encoded JPEG b64 — passed directly to agents
-    image_data = None              # PIL Image kept only for has_image flag
+    image_b64: str | None = None   # base64-encoded image bytes — passed directly to agents
+    image_mime: str = "image/jpeg" # MIME type for data URI
+    image_data = None              # truthy flag — set when image loads OK
     audio_data = None
     tmp_files: list[str] = []
 
     try:
-        # ── Image: bytes → PIL RGB → JPEG bytes → base64 (all in memory) ─────
+        # ── Image: raw upload bytes → base64 (zero re-encoding steps) ──────────
         if image and image.filename:
             try:
                 raw = await image.read()
                 if not raw:
                     logger.warning(f"Image upload '{image.filename}' produced 0 bytes — skipping.")
                 else:
-                    pil = Image.open(io.BytesIO(raw)).convert("RGB")
-                    buf = io.BytesIO()
-                    pil.save(buf, format="JPEG", quality=85)
-                    image_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-                    image_data = pil   # keep PIL for has_image check
+                    # Detect MIME type from filename extension
+                    ext = os.path.splitext(image.filename)[1].lower()
+                    mime = {"jpg":"image/jpeg","jpeg":"image/jpeg",
+                            "png":"image/png","webp":"image/webp","gif":"image/gif"}.get(
+                            ext.lstrip("."), "image/jpeg")
+                    image_b64 = base64.b64encode(raw).decode("utf-8")
+                    image_mime = mime
+                    image_data = True   # flag only — no PIL needed
                     logger.info(
-                        f"Image ready: {pil.size}px  "
-                        f"original={len(raw)//1024}KB  "
-                        f"b64={len(image_b64)//1024}KB  "
-                        f"file='{image.filename}'"
+                        f"Image ready: {len(raw)//1024}KB  mime={mime}  "
+                        f"b64_len={len(image_b64)}  file='{image.filename}'"
                     )
             except Exception as exc:
-                logger.error(f"Image processing error ('{image.filename}'): {exc}", exc_info=True)
+                logger.error(f"Image read error ('{image.filename}'): {exc}", exc_info=True)
                 image_b64 = None
                 image_data = None
 
@@ -204,8 +206,8 @@ async def analyze(
             f"Calling agents — image_b64={'YES ('+str(len(image_b64)//1024)+'KB)' if image_b64 else 'NO'}, "
             f"audio={audio_data is not None}"
         )
-        # image_b64 (pre-encoded JPEG string) is passed directly to each specialist's GPT-4o call
-        results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_b64, audio_data)
+        # image_b64 + image_mime passed directly to each specialist's GPT-4o Vision call
+        results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_b64, audio_data, image_mime)
         gp     = results.get("General Physician", {})
         cardio = results.get("Cardiologist", {})
         neuro  = results.get("Neurologist", {})

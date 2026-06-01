@@ -364,9 +364,11 @@ class AgentCoordinator:
             return None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
-                            image_b64: str | None = None, audio_data=None) -> Dict:
+                            image_b64: str | None = None, audio_data=None,
+                            image_mime: str = "image/jpeg") -> Dict:
         """Synchronous analysis by all 4 specialist agents.
-        image_b64: pre-encoded JPEG base64 string (or None) — sent directly to GPT-4o Vision.
+        image_b64 : raw-bytes base64 string (or None) — sent directly to GPT-4o Vision.
+        image_mime: MIME type for the data URI (e.g. 'image/jpeg', 'image/png').
         """
         if not self._client:
             return {
@@ -379,7 +381,7 @@ class AgentCoordinator:
             }
 
         if image_b64:
-            logger.info(f"Vision enabled: {len(image_b64)//1024}KB b64 image will be sent to all 4 specialists.")
+            logger.info(f"Vision enabled — {len(image_b64)//1024}KB b64 ({image_mime}) to all 4 specialists.")
         else:
             logger.info("No image — text-only analysis.")
 
@@ -392,11 +394,12 @@ class AgentCoordinator:
 
         results = {}
         for name, role in SPECIALISTS.items():
-            results[name] = self._call_specialist(name, role, patient_line, image_b64)
+            results[name] = self._call_specialist(name, role, patient_line, image_b64, image_mime)
         return results
 
     def _call_specialist(self, name: str, role: str, patient_line: str,
-                         img_b64: str | None = None) -> Dict:
+                         img_b64: str | None = None,
+                         img_mime: str = "image/jpeg") -> Dict:
         try:
             prompt = (
                 f"You are {role}\n\n"
@@ -410,17 +413,19 @@ class AgentCoordinator:
                 prompt += (
                     "A medical image has been uploaded by the patient. "
                     "Please examine it carefully and incorporate your visual findings "
-                    "into the analysis. Reference specific things you observe.\n\n"
+                    "into the analysis. Describe specific visual details you observe.\n\n"
                 )
             prompt += "This is for educational purposes only. Always recommend professional medical consultation."
 
-            # Build message content — include image if available
+            # Build message content
             content: list = [{"type": "text", "text": prompt}]
             if img_b64:
+                data_url = f"data:{img_mime};base64,{img_b64}"
+                logger.info(f"{name}: adding image to Vision call — data_url prefix: {data_url[:50]}")
                 content.append({
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/jpeg;base64,{img_b64}",
+                        "url": data_url,
                         "detail": "high",
                     },
                 })
