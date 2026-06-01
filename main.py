@@ -88,25 +88,26 @@ async def debug_vision():
 
         logger.info(f"debug-vision: generated {len(raw)} byte JPEG, b64={len(img_b64)} chars")
 
-        # Call _call_specialist directly — same path as /api/analyze
+        # Step 1: neutral visual description
+        description = agent_coordinator._describe_image(img_b64, img_mime)
+
+        # Step 2: specialist analysis with the description injected as text
         result = agent_coordinator._call_specialist(
             "General Physician",
-            "an experienced family medicine physician",
-            "Patient: Test, 30 year old Male.\nSymptoms: test symptoms",
-            img_b64,
-            img_mime,
+            "an experienced family medicine physician. Provide: "
+            "1) Assessment of likely conditions. 2) Recommendations. 3) Red flags.",
+            "Patient: Test, 30 year old Male.\nSymptoms: Nail discolouration and brittleness.",
+            description,
         )
 
         return {
             "ok": True,
             "image_bytes": len(raw),
-            "b64_chars": len(img_b64),
             "mime": img_mime,
-            "data_url_prefix": f"data:{img_mime};base64,{img_b64[:20]}...",
-            "specialist_saw_image": "unable to view" not in result.get("analysis","").lower(),
-            "analysis_snippet": result.get("analysis","")[:200],
+            "step1_image_description": description[:300],
+            "step2_saw_image_in_analysis": bool(description) and "unable" not in result.get("analysis","").lower(),
+            "analysis_snippet": result.get("analysis","")[:300],
             "client_initialized": agent_coordinator._client is not None,
-            "model": agent_coordinator._MODEL,
         }
     except Exception as exc:
         logger.error(f"debug-vision error: {exc}", exc_info=True)
