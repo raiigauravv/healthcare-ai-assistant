@@ -37,6 +37,11 @@ def _sanitize_error(e: Exception) -> str:
     return msg
 
 
+def _is_bearer_token(api_key: str) -> bool:
+    """Keys starting with AIzaSy are query-param API keys; anything else is a Bearer token."""
+    return not api_key.startswith("AIzaSy")
+
+
 def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -45,17 +50,26 @@ def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
             "temperature": 0.4,
         },
     }
+    use_bearer = _is_bearer_token(api_key)
     last_err = None
     for base, model in _GEMINI_CANDIDATES:
         try:
-            resp = requests.post(
-                f"{base}/{model}:generateContent?key={api_key}",
-                json=payload,
-                timeout=30,
-            )
+            if use_bearer:
+                url = f"{base}/{model}:generateContent"
+                headers = {"Authorization": f"Bearer {api_key}"}
+                resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            else:
+                url = f"{base}/{model}:generateContent?key={api_key}"
+                resp = requests.post(url, json=payload, timeout=30)
+
             if resp.status_code in (404, 400):
                 last_err = f"{model} → HTTP {resp.status_code}"
                 continue
+            if resp.status_code == 401:
+                raise RuntimeError(
+                    "API key is invalid or expired. "
+                    "Get a fresh key from aistudio.google.com → 'Get API key'."
+                )
             resp.raise_for_status()
             return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         except requests.exceptions.HTTPError as e:
@@ -66,9 +80,10 @@ def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
             raise
     # All candidates failed
     raise RuntimeError(
-        "API key does not have Gemini access. "
-        "Get a key from aistudio.google.com → 'Get API key' → 'Create API key', "
-        "then update GEMINI_API_KEY in HF Space Secrets."
+        "No Gemini model responded. "
+        "Make sure GEMINI_API_KEY is a valid key from aistudio.google.com "
+        "(should start with 'AIzaSy...'). "
+        f"Last error: {last_err}"
     )
 
 

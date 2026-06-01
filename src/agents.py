@@ -387,17 +387,26 @@ class AgentCoordinator:
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
         }
+        use_bearer = not self._api_key.startswith("AIzaSy")
         last_err = None
         for base, model in self._GEMINI_CANDIDATES:
             try:
-                resp = requests.post(
-                    f"{base}/{model}:generateContent?key={self._api_key}",
-                    json=payload,
-                    timeout=30,
-                )
+                if use_bearer:
+                    url = f"{base}/{model}:generateContent"
+                    headers = {"Authorization": f"Bearer {self._api_key}"}
+                    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+                else:
+                    url = f"{base}/{model}:generateContent?key={self._api_key}"
+                    resp = requests.post(url, json=payload, timeout=30)
+
                 if resp.status_code in (404, 400):
                     last_err = f"{model} → HTTP {resp.status_code}"
                     continue
+                if resp.status_code == 401:
+                    raise RuntimeError(
+                        "API key is invalid or expired. "
+                        "Get a fresh key from aistudio.google.com → 'Get API key'."
+                    )
                 resp.raise_for_status()
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
             except requests.exceptions.HTTPError as e:
@@ -407,9 +416,9 @@ class AgentCoordinator:
                     continue
                 raise
         raise RuntimeError(
-            "API key does not have Gemini access. "
-            "Get a key from aistudio.google.com → 'Get API key' → 'Create API key', "
-            "then update GEMINI_API_KEY in HF Space Secrets."
+            "No Gemini model responded. "
+            "Make sure GEMINI_API_KEY starts with 'AIzaSy' (from aistudio.google.com). "
+            f"Last error: {last_err}"
         )
 
     def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
