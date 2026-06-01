@@ -2,6 +2,7 @@
 Healthcare AI Assistant — FastAPI backend
 Serves React SPA on / and AI endpoints on /api/*
 """
+import base64
 import io
 import os
 import tempfile
@@ -89,31 +90,43 @@ async def analyze(
     if len(patient_name.strip()) < 2:
         raise HTTPException(400, "Patient name required")
 
-    image_data = audio_data = None
+    image_b64: str | None = None   # pre-encoded JPEG b64 — passed directly to agents
+    image_data = None              # PIL Image kept only for has_image flag
+    audio_data = None
     tmp_files: list[str] = []
 
     try:
-        # ── Image: load directly from bytes (avoids unflushed-temp-file bug) ─
+        # ── Image: bytes → PIL RGB → JPEG bytes → base64 (all in memory) ─────
         if image and image.filename:
             try:
-                img_bytes = await image.read()
-                image_data = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-                logger.info(
-                    f"Image loaded OK: {image_data.size}px, "
-                    f"{len(img_bytes)//1024}KB, filename='{image.filename}'"
-                )
+                raw = await image.read()
+                if not raw:
+                    logger.warning(f"Image upload '{image.filename}' produced 0 bytes — skipping.")
+                else:
+                    pil = Image.open(io.BytesIO(raw)).convert("RGB")
+                    buf = io.BytesIO()
+                    pil.save(buf, format="JPEG", quality=85)
+                    image_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                    image_data = pil   # keep PIL for has_image check
+                    logger.info(
+                        f"Image ready: {pil.size}px  "
+                        f"original={len(raw)//1024}KB  "
+                        f"b64={len(image_b64)//1024}KB  "
+                        f"file='{image.filename}'"
+                    )
             except Exception as exc:
-                logger.warning(f"Image load failed ('{image.filename}'): {exc}")
+                logger.error(f"Image processing error ('{image.filename}'): {exc}", exc_info=True)
+                image_b64 = None
                 image_data = None
 
-        # ── Audio: write to temp file, flush before Whisper reads it ─────────
+        # ── Audio: write to temp file, flush, then read (avoids partial-read) ─
         if audio and audio.filename:
             suffix = os.path.splitext(audio.filename)[1] or ".wav"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 f.write(await audio.read())
-                f.flush()          # flush Python buffer → OS before closing
+                f.flush()          # push Python buffer → OS before closing
                 tmp_files.append(f.name)
-            # File is now closed & fully on disk — safe to read
+            # File is closed & fully on disk now — safe to read
             audio_data = ingest_audio(tmp_files[-1])
             logger.info(f"Audio ingested: {tmp_files[-1]}, data={audio_data is not None}")
 
@@ -137,17 +150,16 @@ async def analyze(
         ctx = {
             "name": patient_name.strip(), "age": patient_age,
             "gender": patient_gender,     "symptoms": full_symptoms,
-            "has_image": image_data is not None,
+            "has_image": image_b64 is not None,
             "has_audio": audio_data is not None,
         }
 
         logger.info(
-            f"Sending to agents — image: {image_data is not None} "
-            f"({f'{image_data.size}' if image_data else 'none'}), "
-            f"audio: {audio_data is not None}"
+            f"Calling agents — image_b64={'YES ('+str(len(image_b64)//1024)+'KB)' if image_b64 else 'NO'}, "
+            f"audio={audio_data is not None}"
         )
-        # image_data (PIL Image) is passed to each specialist via GPT-4o Vision
-        results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_data, audio_data)
+        # image_b64 (pre-encoded JPEG string) is passed directly to each specialist's GPT-4o call
+        results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_b64, audio_data)
         gp     = results.get("General Physician", {})
         cardio = results.get("Cardiologist", {})
         neuro  = results.get("Neurologist", {})
@@ -156,7 +168,7 @@ async def analyze(
         plain = (
             f"Patient: {patient_name}, {patient_age}yo {patient_gender}\n"
             f"Symptoms: {full_symptoms}\n"
-            + (f"Image: uploaded and examined by GPT-4o Vision\n" if image_data else "")
+            + (f"Image: uploaded and examined by GPT-4o Vision\n" if image_b64 else "")
             + (f"Audio: {audio_transcription}\n" if audio_transcription else "")
             + f"\nGP: {gp.get('analysis','')} | {gp.get('recommendations','')}\n"
             f"Cardio: {cardio.get('analysis','')} | {cardio.get('recommendations','')}\n"
@@ -170,7 +182,7 @@ async def analyze(
             "neurologist": neuro,    "dermatologist": derma,
             "plain_summary": plain,
             "name": patient_name, "age": patient_age, "gender": patient_gender,
-            "has_image": image_data is not None,
+            "has_image": image_b64 is not None,
             "has_audio": audio_data is not None,
             "timestamp": datetime.now().strftime("%b %d, %Y  %H:%M"),
         }

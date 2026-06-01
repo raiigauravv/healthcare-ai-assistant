@@ -364,9 +364,9 @@ class AgentCoordinator:
             return None
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
-                            image_data=None, audio_data=None) -> Dict:
+                            image_b64: str | None = None, audio_data=None) -> Dict:
         """Synchronous analysis by all 4 specialist agents.
-        image_data: PIL Image object (or None) — sent to each specialist via GPT-4o Vision.
+        image_b64: pre-encoded JPEG base64 string (or None) — sent directly to GPT-4o Vision.
         """
         if not self._client:
             return {
@@ -378,12 +378,10 @@ class AgentCoordinator:
                 for name in SPECIALISTS
             }
 
-        # Encode image once, reuse for all specialists
-        img_b64 = self._pil_to_b64(image_data) if image_data is not None else None
-        if image_data is not None and img_b64 is None:
-            logger.error("Image was provided but base64 encoding FAILED — specialists will not see the image.")
-        elif img_b64:
-            logger.info(f"Image encoded OK ({len(img_b64)//1024}KB b64) — all 4 specialists will examine it via GPT-4o Vision.")
+        if image_b64:
+            logger.info(f"Vision enabled: {len(image_b64)//1024}KB b64 image will be sent to all 4 specialists.")
+        else:
+            logger.info("No image — text-only analysis.")
 
         patient_line = (
             f"Patient: {patient_context.get('name', 'Patient')}, "
@@ -394,7 +392,7 @@ class AgentCoordinator:
 
         results = {}
         for name, role in SPECIALISTS.items():
-            results[name] = self._call_specialist(name, role, patient_line, img_b64)
+            results[name] = self._call_specialist(name, role, patient_line, image_b64)
         return results
 
     def _call_specialist(self, name: str, role: str, patient_line: str,
