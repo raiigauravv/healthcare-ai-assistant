@@ -143,21 +143,34 @@ async def analyze(
     tmp_files: list[str] = []
 
     try:
-        # ── Image: raw upload bytes → base64 (zero re-encoding steps) ──────────
+        # ── Image: detect format from magic bytes, encode raw bytes → base64 ───
         if image and image.filename:
             try:
                 raw = await image.read()
                 if not raw:
                     logger.warning(f"Image upload '{image.filename}' produced 0 bytes — skipping.")
                 else:
-                    # Detect MIME type from filename extension
-                    ext = os.path.splitext(image.filename)[1].lower()
-                    mime = {"jpg":"image/jpeg","jpeg":"image/jpeg",
-                            "png":"image/png","webp":"image/webp","gif":"image/gif"}.get(
-                            ext.lstrip("."), "image/jpeg")
+                    # Detect format from magic bytes (not unreliable extension)
+                    if raw[:3] == b'\xff\xd8\xff':
+                        mime = "image/jpeg"
+                    elif raw[:8] == b'\x89PNG\r\n\x1a\n':
+                        mime = "image/png"
+                    elif raw[:6] in (b'GIF87a', b'GIF89a'):
+                        mime = "image/gif"
+                    elif raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+                        mime = "image/webp"
+                    else:
+                        # Unsupported format (e.g. HEIC) — convert via PIL to JPEG
+                        logger.info(f"Unknown magic bytes, converting via PIL: {raw[:8].hex()}")
+                        pil = Image.open(io.BytesIO(raw)).convert("RGB")
+                        buf = io.BytesIO()
+                        pil.save(buf, format="JPEG", quality=90)
+                        raw = buf.getvalue()
+                        mime = "image/jpeg"
+
                     image_b64 = base64.b64encode(raw).decode("utf-8")
                     image_mime = mime
-                    image_data = True   # flag only — no PIL needed
+                    image_data = True   # flag only
                     logger.info(
                         f"Image ready: {len(raw)//1024}KB  mime={mime}  "
                         f"b64_len={len(image_b64)}  file='{image.filename}'"
