@@ -20,6 +20,7 @@ load_dotenv()
 from src.ingestion import ingest_text, ingest_image, ingest_audio
 from src.preprocess import preprocess_text
 from src.openai_integration import OpenAIHealthcareAssistant
+from src.claude_integration import ClaudePatientAssistant
 from src.agents import AgentCoordinator
 
 logging.basicConfig(level=logging.INFO)
@@ -29,12 +30,18 @@ print(f"===== Startup {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
 
 try:
     healthcare_ai = OpenAIHealthcareAssistant()
+    claude_assistant = ClaudePatientAssistant()
     agent_coordinator = AgentCoordinator()
     READY = True
-    logger.info("AI components initialised")
+    logger.info(
+        f"AI components initialised — "
+        f"Claude dialogue: {'ON' if claude_assistant.available else 'OFF (no ANTHROPIC_API_KEY)'}, "
+        f"OpenAI: {'mock' if healthcare_ai.mock_mode else 'ON'}"
+    )
 except Exception as exc:
     logger.error(f"AI init failed: {exc}")
     READY = False
+    claude_assistant = None
 
 # ── App ──────────────────────────────────────────────────────────────────────
 
@@ -60,6 +67,7 @@ async def health():
         "ok": True,
         "ai_ready": READY,
         "api_configured": READY and not healthcare_ai.mock_mode,
+        "claude_available": READY and claude_assistant is not None and claude_assistant.available,
     }
 
 
@@ -168,27 +176,48 @@ async def chat(req: ChatRequest):
     if len(req.question.strip()) < 2:
         raise HTTPException(400, "Question too short")
     try:
-        parts = []
-        if req.analysis_context and len(req.analysis_context.strip()) > 50:
-            parts.append(
-                f"Specialist analysis already performed:\n\n{req.analysis_context}\n\n---\n"
-                "Answer the follow-up question specifically based on this analysis."
-            )
-        else:
-            parts.append(
-                "You are a healthcare AI assistant. No prior analysis — "
-                "answer general health questions and recommend professional consultation."
-            )
+        # Normalise history into list-of-tuples for Claude
+        history_pairs = []
         if req.history:
-            lines = []
             for item in req.history[-3:]:
                 if isinstance(item, (list, tuple)) and len(item) == 2 and item[0] and item[1]:
-                    lines.append(f"Patient: {item[0]}\nAssistant: {item[1]}")
-            if lines:
+                    history_pairs.append((str(item[0]), str(item[1])))
+
+        # ── 1. Try Claude (patient dialogue model) ──────────────────────────
+        response = None
+        model_used = "openai"
+        if claude_assistant and claude_assistant.available:
+            response = claude_assistant.chat(
+                question=req.question,
+                patient_name=req.patient_name,
+                analysis_context=req.analysis_context,
+                history=history_pairs,
+            )
+            if response:
+                model_used = "claude"
+                logger.info("Chat handled by Claude")
+
+        # ── 2. Fall back to OpenAI gpt-4o-mini ──────────────────────────────
+        if not response:
+            parts = []
+            if req.analysis_context and len(req.analysis_context.strip()) > 50:
+                parts.append(
+                    f"Specialist analysis already performed:\n\n{req.analysis_context}\n\n---\n"
+                    "Answer the follow-up question specifically based on this analysis."
+                )
+            else:
+                parts.append(
+                    "You are a healthcare AI assistant. No prior analysis — "
+                    "answer general health questions and recommend professional consultation."
+                )
+            if history_pairs:
+                lines = [f"Patient: {u}\nAssistant: {a}" for u, a in history_pairs]
                 parts.append("Recent conversation:\n" + "\n".join(lines))
-        parts.append(f"Patient ({req.patient_name}) asks: {req.question}")
-        response = healthcare_ai.get_health_recommendation("\n\n".join(parts))
-        return {"success": True, "response": response}
+            parts.append(f"Patient ({req.patient_name}) asks: {req.question}")
+            response = healthcare_ai.get_health_recommendation("\n\n".join(parts))
+            logger.info("Chat handled by OpenAI (fallback)")
+
+        return {"success": True, "response": response, "model": model_used}
     except Exception as exc:
         logger.error(f"Chat error: {exc}")
         raise HTTPException(500, str(exc))

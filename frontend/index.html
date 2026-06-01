@@ -446,15 +446,33 @@ function ResultsPanel({ results, loading }) {
 /* ═══════════════════════════════════════════
    ChatMessage
 ═══════════════════════════════════════════ */
-function ChatMessage({ role, content }) {
+function ChatMessage({ role, content, model }) {
   const user = role === 'user';
+  const isClaude = model === 'claude';
   return (
     <div style={{display:'flex', justifyContent:user?'flex-end':'flex-start', alignItems:'flex-end', gap:8, marginBottom:14}}>
       {!user && (
-        <div style={{width:32, height:32, borderRadius:'50%', background:'linear-gradient(135deg,#1d4ed8,#0891b2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.9rem', flexShrink:0}}>🤖</div>
+        <div style={{
+          width:32, height:32, borderRadius:'50%', flexShrink:0,
+          background: isClaude
+            ? 'linear-gradient(135deg,#c97c3a,#e8956d)'
+            : 'linear-gradient(135deg,#1d4ed8,#0891b2)',
+          display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.9rem'
+        }}>{isClaude ? '🟠' : '🤖'}</div>
       )}
-      <div className={user?'bubble-user':'bubble-bot'} style={{maxWidth:'76%', padding:'11px 16px', fontSize:'.875rem', lineHeight:1.7}}>
-        {content}
+      <div style={{maxWidth:'76%', display:'flex', flexDirection:'column', alignItems: user ? 'flex-end' : 'flex-start', gap:4}}>
+        {!user && model && (
+          <span style={{
+            fontSize:'.62rem', fontWeight:700, letterSpacing:'.3px',
+            color: isClaude ? '#c97c3a' : '#0891b2',
+            padding:'1px 7px', borderRadius:8,
+            background: isClaude ? '#fef3e2' : '#e0f2fe',
+            border: `1px solid ${isClaude ? '#f5cba7' : '#bae6fd'}`,
+          }}>{isClaude ? 'Claude · Patient Dialogue' : 'GPT-4o-mini · Fallback'}</span>
+        )}
+        <div className={user?'bubble-user':'bubble-bot'} style={{padding:'11px 16px', fontSize:'.875rem', lineHeight:1.7}}>
+          {content}
+        </div>
       </div>
       {user && (
         <div style={{width:32, height:32, borderRadius:'50%', background:'#e2e8f0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.85rem', flexShrink:0}}>👤</div>
@@ -548,13 +566,13 @@ function App() {
     setChatLoading(true);
     try {
       const pairs = [];
-      for (let i = 0; i < chatHistory.length - 1; i += 2) {
+      for (let i = 0; i < chatHistory.length; i++) {
         if (chatHistory[i]?.role === 'user' && chatHistory[i+1]?.role === 'bot') {
           pairs.push([chatHistory[i].content, chatHistory[i+1].content]);
         }
       }
       const data = await api.chat({ question:q, history:pairs, patient_name:name||'Patient', analysis_context:context });
-      setChatHistory([...newHistory, { role:'bot', content:data.response }]);
+      setChatHistory([...newHistory, { role:'bot', content:data.response, model:data.model }]);
     } catch(e) {
       setChatHistory([...newHistory, { role:'bot', content:`❌ ${e.message}` }]);
     } finally {
@@ -625,12 +643,22 @@ function App() {
           <p style={{color:'rgba(255,255,255,.72)', fontSize:'.95rem', maxWidth:460, margin:'0 auto 26px', lineHeight:1.65}}>
             Describe your symptoms and get instant multi-specialist AI analysis in seconds
           </p>
-          <div style={{display:'flex', justifyContent:'center', gap:36, flexWrap:'wrap'}}>
+          <div style={{display:'flex', justifyContent:'center', gap:36, flexWrap:'wrap', marginBottom:14}}>
             {[['4','AI Specialists'],['3','Input Modes'],['<30s','Analysis Time']].map(([n,l]) => (
               <div key={l} style={{textAlign:'center'}}>
                 <div style={{fontWeight:900, fontSize:'1.4rem', color:'#fff', lineHeight:1}}>{n}</div>
                 <div style={{fontSize:'.68rem', color:'rgba(255,255,255,.6)', marginTop:4, fontWeight:600, textTransform:'uppercase', letterSpacing:'.5px'}}>{l}</div>
               </div>
+            ))}
+          </div>
+          <div style={{display:'flex', justifyContent:'center', gap:8, flexWrap:'wrap'}}>
+            {[['🟠','Claude'],['🔵','GPT-4o Vision'],['🎤','Whisper ASR']].map(([ic,label]) => (
+              <div key={label} style={{
+                background:'rgba(255,255,255,.1)', backdropFilter:'blur(8px)',
+                border:'1px solid rgba(255,255,255,.18)', borderRadius:20,
+                padding:'4px 14px', fontSize:'.7rem', color:'rgba(255,255,255,.85)', fontWeight:600,
+                display:'flex', alignItems:'center', gap:5
+              }}>{ic} {label}</div>
             ))}
           </div>
         </div>
@@ -768,11 +796,16 @@ function App() {
               <h3 style={{margin:0, fontWeight:800, fontSize:'.9rem', color:'#1e293b'}}>AI Health Assistant Chat</h3>
               <p style={{margin:0, fontSize:'.73rem', color:'#94a3b8'}}>{context?'Context-aware — responses based on your analysis':'Ask general health questions'}</p>
             </div>
-            {context && (
-              <div style={{background:'#dcfce7', border:'1px solid #86efac', borderRadius:20, padding:'4px 12px', fontSize:'.7rem', fontWeight:700, color:'#16a34a'}}>
-                ✓ Analysis Loaded
+            <div style={{display:'flex', gap:6, flexWrap:'wrap', justifyContent:'flex-end'}}>
+              <div style={{background:'#fef3e2', border:'1px solid #f5cba7', borderRadius:20, padding:'4px 10px', fontSize:'.68rem', fontWeight:700, color:'#c97c3a'}}>
+                🟠 Claude Dialogue
               </div>
-            )}
+              {context && (
+                <div style={{background:'#dcfce7', border:'1px solid #86efac', borderRadius:20, padding:'4px 10px', fontSize:'.68rem', fontWeight:700, color:'#16a34a'}}>
+                  ✓ Analysis Loaded
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Messages */}
@@ -787,7 +820,7 @@ function App() {
               </div>
             ) : (
               <>
-                {chatHistory.map((m,i) => <ChatMessage key={i} role={m.role} content={m.content} />)}
+                {chatHistory.map((m,i) => <ChatMessage key={i} role={m.role} content={m.content} model={m.model} />)}
                 {chatLoading && <TypingDots />}
                 <div ref={chatEnd} />
               </>
@@ -818,8 +851,22 @@ function App() {
       {/* ══ Footer ══ */}
       <footer style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)', padding:'26px 28px', display:'flex', flexWrap:'wrap', gap:20, alignItems:'center', justifyContent:'space-between'}}>
         <div>
-          <div style={{color:'#fff', fontWeight:900, fontSize:'.9rem', marginBottom:4}}>🏥 HealthAI Assistant</div>
-          <div style={{color:'rgba(255,255,255,.45)', fontSize:'.72rem'}}>Powered by OpenAI GPT-4o-mini · 4 Specialist Agents</div>
+          <div style={{color:'#fff', fontWeight:900, fontSize:'.9rem', marginBottom:6}}>🏥 HealthAI Assistant</div>
+          <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+            {[
+              ['🟠','Claude','Patient Dialogue','#c97c3a','#3d2000'],
+              ['🔵','GPT-4o','Vision + Analysis','#60a5fa','#1e3a5f'],
+              ['🎤','Whisper','Voice Transcription','#a78bfa','#2e1065'],
+            ].map(([ic,name,role,clr,bg]) => (
+              <div key={name} style={{background:bg, border:`1px solid ${clr}33`, borderRadius:8, padding:'3px 8px', display:'flex', alignItems:'center', gap:5}}>
+                <span style={{fontSize:'.7rem'}}>{ic}</span>
+                <div>
+                  <span style={{color:clr, fontWeight:700, fontSize:'.65rem'}}>{name}</span>
+                  <span style={{color:'rgba(255,255,255,.35)', fontSize:'.6rem'}}> · {role}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         <div style={{display:'flex', gap:28}}>
           {[['4','Specialists'],['3','Input Modes'],['∞','Chat Memory']].map(([n,l]) => (
@@ -829,7 +876,10 @@ function App() {
             </div>
           ))}
         </div>
-        <div style={{color:'rgba(255,255,255,.3)', fontSize:'.7rem', textAlign:'right'}}>Version 3.0 · Educational Use Only<br/>No medical data stored</div>
+        <div style={{color:'rgba(255,255,255,.3)', fontSize:'.7rem', textAlign:'right'}}>
+          Educational Use Only · No PHI stored<br/>
+          <span style={{color:'rgba(255,255,255,.18)'}}>Data handled with privacy controls</span>
+        </div>
       </footer>
 
     </div>
