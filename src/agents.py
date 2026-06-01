@@ -372,14 +372,15 @@ class AgentCoordinator:
             results[name] = self._call_specialist(name, role, patient_line)
         return results
 
-    _MODELS = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash-001",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro",
+    _GEMINI_CANDIDATES = [
+        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash"),
+        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-flash"),
+        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-flash-latest"),
+        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-1.5-pro"),
+        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-1.5-pro"),
+        ("https://generativelanguage.googleapis.com/v1beta/models", "gemini-2.0-flash"),
+        ("https://generativelanguage.googleapis.com/v1/models",     "gemini-2.0-flash"),
     ]
-    _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
     def _gemini_post(self, prompt: str, max_tokens: int = 600) -> str:
         payload = {
@@ -387,26 +388,28 @@ class AgentCoordinator:
             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
         }
         last_err = None
-        for model in self._MODELS:
+        for base, model in self._GEMINI_CANDIDATES:
             try:
                 resp = requests.post(
-                    f"{self._GEMINI_BASE}/{model}:generateContent?key={self._api_key}",
+                    f"{base}/{model}:generateContent?key={self._api_key}",
                     json=payload,
                     timeout=30,
                 )
-                if resp.status_code == 404:
-                    last_err = f"model {model} not found"
+                if resp.status_code in (404, 400):
+                    last_err = f"{model} → HTTP {resp.status_code}"
                     continue
                 resp.raise_for_status()
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
             except requests.exceptions.HTTPError as e:
-                if e.response is not None and e.response.status_code == 404:
-                    last_err = f"model {model} not found"
+                code = e.response.status_code if e.response is not None else "?"
+                if code in (404, 400):
+                    last_err = f"{model} → HTTP {code}"
                     continue
                 raise
         raise RuntimeError(
-            f"No Gemini model accessible. Check GEMINI_API_KEY has 'Generative Language API' "
-            f"enabled at aistudio.google.com. ({last_err})"
+            "API key does not have Gemini access. "
+            "Get a key from aistudio.google.com → 'Get API key' → 'Create API key', "
+            "then update GEMINI_API_KEY in HF Space Secrets."
         )
 
     def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
