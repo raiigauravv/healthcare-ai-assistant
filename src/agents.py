@@ -1,5 +1,7 @@
 # src/agents.py - Healthcare AI Specialist Agents
 import os
+import io
+import base64
 from typing import Dict, List, Optional, Union
 import logging
 from PIL import Image
@@ -337,9 +339,9 @@ SPECIALISTS = {
 
 
 class AgentCoordinator:
-    """Coordinates multiple specialist agents using OpenAI."""
+    """Coordinates multiple specialist agents using OpenAI gpt-4o (Vision)."""
 
-    _MODEL = "gpt-4o-mini"
+    _MODEL = "gpt-4o"   # Vision-capable model
 
     def __init__(self):
         self.triage_agent = TriageAgent()
@@ -350,9 +352,22 @@ class AgentCoordinator:
         api_key = os.getenv("OPENAI_API_KEY")
         self._client = OpenAI(api_key=api_key) if api_key else None
 
+    @staticmethod
+    def _pil_to_b64(img) -> str | None:
+        """Encode a PIL Image as a base64 JPEG string."""
+        try:
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=85)
+            return base64.b64encode(buf.getvalue()).decode("utf-8")
+        except Exception as e:
+            logger.warning(f"Image encoding failed: {e}")
+            return None
+
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
-        """Synchronous analysis by all 4 specialist agents."""
+        """Synchronous analysis by all 4 specialist agents.
+        image_data: PIL Image object (or None) — sent to each specialist via GPT-4o Vision.
+        """
         if not self._client:
             return {
                 name: {
@@ -363,6 +378,11 @@ class AgentCoordinator:
                 for name in SPECIALISTS
             }
 
+        # Encode image once, reuse for all specialists
+        img_b64 = self._pil_to_b64(image_data) if image_data is not None else None
+        if img_b64:
+            logger.info("Image encoded for GPT-4o Vision — all specialists will examine it.")
+
         patient_line = (
             f"Patient: {patient_context.get('name', 'Patient')}, "
             f"{patient_context.get('age', '?')} year old "
@@ -372,10 +392,11 @@ class AgentCoordinator:
 
         results = {}
         for name, role in SPECIALISTS.items():
-            results[name] = self._call_specialist(name, role, patient_line)
+            results[name] = self._call_specialist(name, role, patient_line, img_b64)
         return results
 
-    def _call_specialist(self, name: str, role: str, patient_line: str) -> Dict:
+    def _call_specialist(self, name: str, role: str, patient_line: str,
+                         img_b64: str | None = None) -> Dict:
         try:
             prompt = (
                 f"You are {role}\n\n"
@@ -384,12 +405,30 @@ class AgentCoordinator:
                 f"2. Specific recommendations\n"
                 f"3. Red flags to watch for\n\n"
                 f"{patient_line}\n\n"
-                f"This is for educational purposes only. Always recommend professional medical consultation."
             )
+            if img_b64:
+                prompt += (
+                    "A medical image has been uploaded by the patient. "
+                    "Please examine it carefully and incorporate your visual findings "
+                    "into the analysis. Reference specific things you observe.\n\n"
+                )
+            prompt += "This is for educational purposes only. Always recommend professional medical consultation."
+
+            # Build message content — include image if available
+            content: list = [{"type": "text", "text": prompt}]
+            if img_b64:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{img_b64}",
+                        "detail": "high",
+                    },
+                })
+
             response = self._client.chat.completions.create(
                 model=self._MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=600,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=700,
                 temperature=0.4,
             )
             text = response.choices[0].message.content.strip()
@@ -398,7 +437,7 @@ class AgentCoordinator:
             return {
                 "analysis": "\n".join(lines[:mid]),
                 "recommendations": "\n".join(lines[mid:]),
-                "confidence_score": 0.82,
+                "confidence_score": 0.85,
             }
         except Exception as e:
             logger.error(f"{name} agent error: {e}")

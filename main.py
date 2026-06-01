@@ -98,14 +98,31 @@ async def analyze(
                 audio_data = ingest_audio(f.name)
 
         processed = preprocess_text(ingest_text(symptoms))
+
+        # ── Whisper audio transcription ──────────────────────────────────────
+        audio_transcription = ""
+        if audio_data is not None and tmp_files:
+            # The last temp file written was the audio file
+            audio_path = next((p for p in reversed(tmp_files)
+                               if any(p.endswith(x) for x in ('.wav','.mp3','.m4a','.ogg','.flac','.webm'))), None)
+            if audio_path:
+                audio_transcription = healthcare_ai.analyze_audio_symptoms(audio_path, processed)
+                logger.info(f"Whisper result: {audio_transcription[:80]}")
+
+        # Enrich the symptoms text with any voice transcription
+        full_symptoms = processed
+        if audio_transcription and "transcription" in audio_transcription.lower():
+            full_symptoms += f"\n\nVoice note: {audio_transcription}"
+
         ctx = {
             "name": patient_name.strip(), "age": patient_age,
-            "gender": patient_gender,     "symptoms": processed,
+            "gender": patient_gender,     "symptoms": full_symptoms,
             "has_image": image_data is not None,
             "has_audio": audio_data is not None,
         }
 
-        results = agent_coordinator.analyze_with_agents(ctx, processed, image_data, audio_data)
+        # image_data (PIL Image) is passed to each specialist who will see it via GPT-4o Vision
+        results = agent_coordinator.analyze_with_agents(ctx, full_symptoms, image_data, audio_data)
         gp     = results.get("General Physician", {})
         cardio = results.get("Cardiologist", {})
         neuro  = results.get("Neurologist", {})
@@ -113,8 +130,10 @@ async def analyze(
 
         plain = (
             f"Patient: {patient_name}, {patient_age}yo {patient_gender}\n"
-            f"Symptoms: {processed}\n\n"
-            f"GP: {gp.get('analysis','')} | {gp.get('recommendations','')}\n"
+            f"Symptoms: {full_symptoms}\n"
+            + (f"Image: uploaded and examined by GPT-4o Vision\n" if image_data else "")
+            + (f"Audio: {audio_transcription}\n" if audio_transcription else "")
+            + f"\nGP: {gp.get('analysis','')} | {gp.get('recommendations','')}\n"
             f"Cardio: {cardio.get('analysis','')} | {cardio.get('recommendations','')}\n"
             f"Neuro: {neuro.get('analysis','')} | {neuro.get('recommendations','')}\n"
             f"Derm: {derma.get('analysis','')} | {derma.get('recommendations','')}\n"
