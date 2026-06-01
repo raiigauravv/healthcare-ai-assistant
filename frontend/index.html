@@ -501,6 +501,56 @@ function TypingDots() {
 }
 
 /* ═══════════════════════════════════════════
+   PrivacyBanner  (HIPAA/PIPEDA consent notice)
+═══════════════════════════════════════════ */
+function PrivacyBanner({ onAccept }) {
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:999,
+      background:'rgba(15,23,42,.72)', backdropFilter:'blur(6px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20
+    }}>
+      <div className="card" style={{maxWidth:480, padding:'28px 32px', animation:'fadeUp .4s ease-out'}}>
+        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:18}}>
+          <div style={{background:'#eff6ff', borderRadius:10, padding:'8px 10px', fontSize:'1.3rem'}}>🔒</div>
+          <div>
+            <h2 style={{margin:0, fontWeight:900, fontSize:'1rem', color:'#1e293b'}}>Privacy Notice</h2>
+            <p style={{margin:0, fontSize:'.72rem', color:'#94a3b8'}}>Please read before continuing</p>
+          </div>
+        </div>
+
+        <div style={{fontSize:'.83rem', color:'#374151', lineHeight:1.75, marginBottom:20}}>
+          <p style={{margin:'0 0 10px'}}>This tool is <strong>for educational purposes only</strong> and does not constitute medical advice.</p>
+          <div style={{background:'#f0fdf4', borderRadius:10, padding:'12px 16px', border:'1px solid #86efac', marginBottom:12}}>
+            <p style={{margin:'0 0 6px', fontWeight:700, color:'#166534', fontSize:'.8rem'}}>🛡️ How your data is handled</p>
+            <ul style={{margin:0, paddingLeft:18, color:'#374151'}}>
+              <li>No patient data is stored or logged on our servers</li>
+              <li>All data is processed in memory and discarded after your request</li>
+              <li>Uploaded files are deleted immediately after analysis</li>
+              <li>All connections use encrypted HTTPS transmission</li>
+              <li>Symptom text and images are sent to OpenAI / Anthropic only for the duration of your request</li>
+            </ul>
+          </div>
+          <p style={{margin:0, fontSize:'.75rem', color:'#64748b'}}>
+            By continuing you acknowledge this is a demonstration tool and consent to the above data handling practices.
+          </p>
+        </div>
+
+        <button
+          onClick={onAccept}
+          style={{
+            width:'100%', padding:'13px', border:'none', borderRadius:10,
+            background:'linear-gradient(135deg,#1d4ed8,#1e40af)', color:'#fff',
+            fontWeight:700, fontSize:'.9rem', cursor:'pointer',
+            boxShadow:'0 4px 14px rgba(29,78,216,.35)'
+          }}
+        >I Understand — Continue to HealthAI</button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
    App
 ═══════════════════════════════════════════ */
 function App() {
@@ -516,6 +566,11 @@ function App() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+
+  // Privacy consent
+  const [privacyAccepted, setPrivacyAccepted] = useState(
+    () => sessionStorage.getItem('privacy_accepted') === '1'
+  );
 
   // Chat
   const [chatHistory, setChatHistory] = useState([]);
@@ -593,6 +648,13 @@ function App() {
   /* ─────────────────────────────────────── RENDER ── */
   return (
     <div style={{minHeight:'100vh', display:'flex', flexDirection:'column'}}>
+
+      {!privacyAccepted && (
+        <PrivacyBanner onAccept={() => {
+          sessionStorage.setItem('privacy_accepted', '1');
+          setPrivacyAccepted(true);
+        }} />
+      )}
 
       {/* ══ Navbar ══ */}
       <nav style={{
