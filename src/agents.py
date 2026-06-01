@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 import logging
 from PIL import Image
 from dotenv import load_dotenv
-from google import genai
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -345,13 +345,12 @@ class AgentCoordinator:
         self.general_practice_agent = GeneralPracticeAgent()
         self.followup_agent = FollowUpAgent()
 
-        api_key = os.getenv("GEMINI_API_KEY")
-        self._client = genai.Client(api_key=api_key) if api_key else None
+        self._api_key = os.getenv("GEMINI_API_KEY")
 
     def analyze_with_agents(self, patient_context: Dict, symptoms_text: str,
                             image_data=None, audio_data=None) -> Dict:
         """Synchronous analysis by all 4 specialist agents."""
-        if self._client is None:
+        if not self._api_key:
             return {
                 name: {
                     "analysis": "GEMINI_API_KEY not configured.",
@@ -384,12 +383,17 @@ class AgentCoordinator:
                 f"{patient_line}\n\n"
                 f"This is for educational purposes only. Always recommend professional medical consultation."
             )
-            response = self._client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config={"max_output_tokens": 600, "temperature": 0.4},
+            resp = requests.post(
+                "https://generativelanguage.googleapis.com/v1beta"
+                f"/models/gemini-2.0-flash:generateContent?key={self._api_key}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"maxOutputTokens": 600, "temperature": 0.4},
+                },
+                timeout=30,
             )
-            text = (response.text or "").strip()
+            resp.raise_for_status()
+            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
             lines = text.split("\n")
             mid = max(1, len(lines) // 2)
             return {

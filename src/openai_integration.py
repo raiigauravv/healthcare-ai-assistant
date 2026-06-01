@@ -1,23 +1,41 @@
 """
-Healthcare AI Assistant - Gemini Integration (google-genai SDK)
+Healthcare AI Assistant - Gemini REST API (no SDK, avoids websockets conflict)
 """
 
 import os
 import logging
-from typing import Dict, Any, Optional
-from PIL import Image
-from google import genai
+import requests
+from typing import Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash"
-
-SYSTEM_DISCLAIMER = (
-    "You are an AI healthcare assistant for educational purposes only. "
-    "You do not provide medical diagnoses. Always recommend professional medical consultation. "
-    "Be empathetic and responsible."
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta"
+    "/models/gemini-2.0-flash:generateContent"
 )
+
+DISCLAIMER = (
+    "You are an AI healthcare assistant for educational purposes only. "
+    "You do not provide medical diagnoses. "
+    "Always recommend professional medical consultation."
+)
+
+
+def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
+    resp = requests.post(
+        f"{_GEMINI_URL}?key={api_key}",
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": 0.4,
+            },
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 class OpenAIHealthcareAssistant:
@@ -28,60 +46,32 @@ class OpenAIHealthcareAssistant:
         if not self.api_key:
             logger.warning("GEMINI_API_KEY not found. Using mock responses.")
             self.mock_mode = True
-            self.client = None
         else:
-            self.client = genai.Client(api_key=self.api_key)
             self.mock_mode = False
-            logger.info("Gemini client initialized successfully")
+            logger.info("Gemini API key loaded successfully")
 
-    def _generate(self, prompt: str, max_tokens: int = 800) -> str:
-        response = self.client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config={"max_output_tokens": max_tokens, "temperature": 0.4},
-        )
-        return response.text or ""
-
-    def encode_image(self, image_path: str) -> Optional[Image.Image]:
-        try:
-            return Image.open(image_path).convert("RGB")
-        except Exception as e:
-            logger.error(f"Image load error: {e}")
-            return None
+    def _call(self, prompt: str, max_tokens: int = 800) -> str:
+        return _call_gemini(prompt, self.api_key, max_tokens)
 
     def analyze_medical_image(self, image_path: str, symptoms: str) -> str:
         if self.mock_mode:
-            return self._mock_image_analysis(symptoms)
+            return f"Mock image analysis. Add GEMINI_API_KEY to enable real analysis."
         try:
-            img = self.encode_image(image_path)
-            if img is None:
-                return "Unable to process image."
             prompt = (
-                f"{SYSTEM_DISCLAIMER}\n\n"
-                f"Patient symptoms: {symptoms}\n\n"
-                "Analyze this medical image:\n"
-                "1. Objective visual observations\n"
-                "2. Possible correlations with described symptoms\n"
+                f"{DISCLAIMER}\n\nPatient symptoms: {symptoms}\n\n"
+                "Provide observations related to these symptoms:\n"
+                "1. Possible findings\n"
+                "2. Correlations with described symptoms\n"
                 "3. Recommendations for further evaluation\n"
                 "Emphasize this is not a medical diagnosis."
             )
-            response = self.client.models.generate_content(
-                model=MODEL,
-                contents=[prompt, img],
-                config={"max_output_tokens": 500, "temperature": 0.3},
-            )
-            return response.text or "Image analysis unavailable."
+            return self._call(prompt, 500)
         except Exception as e:
             logger.error(f"Image analysis error: {e}")
             return f"Image analysis unavailable: {e}"
 
     def analyze_audio_symptoms(self, audio_path: str, symptoms: str) -> str:
-        if self.mock_mode:
-            return self._mock_audio_analysis(symptoms)
-        return (
-            "Audio recorded. Please describe any additional observations "
-            "in your symptom description for more accurate analysis."
-        )
+        return "Audio recorded. Include any additional details in your symptom description."
 
     def comprehensive_health_analysis(
         self,
@@ -93,15 +83,15 @@ class OpenAIHealthcareAssistant:
         patient_gender: str = "Not specified",
     ) -> Dict[str, Any]:
         if self.mock_mode:
-            return self._mock_comprehensive_analysis(symptoms, patient_age, patient_gender)
+            return self._mock_analysis(symptoms, patient_age, patient_gender)
         try:
             patient_name = str(patient_name) if patient_name else ""
             patient_age = int(patient_age) if patient_age else 30
             patient_gender = str(patient_gender) if patient_gender else "Not specified"
-
             prompt = (
-                f"{SYSTEM_DISCLAIMER}\n\n"
-                f"Patient: {patient_name or 'Not provided'}, {patient_age} years old, {patient_gender}\n"
+                f"{DISCLAIMER}\n\n"
+                f"Patient: {patient_name or 'Not provided'}, "
+                f"{patient_age} years old, {patient_gender}\n"
                 f"Symptoms: {symptoms}\n"
             )
             if image_analysis:
@@ -109,19 +99,17 @@ class OpenAIHealthcareAssistant:
             if audio_analysis:
                 prompt += f"Audio Analysis: {audio_analysis}\n"
             prompt += (
-                "\nProvide a structured analysis:\n"
-                "1. Personalized greeting using patient name if provided\n"
-                "2. Summary of presented symptoms\n"
-                "3. Possible conditions to discuss with healthcare providers\n"
-                "4. General health recommendations\n"
-                "5. When to seek immediate medical attention\n"
-                "Format with clear sections."
+                "\nProvide structured analysis:\n"
+                "1. Greeting using patient name\n"
+                "2. Symptom summary\n"
+                "3. Possible conditions to discuss with a doctor\n"
+                "4. Health recommendations\n"
+                "5. When to seek immediate care"
             )
-
-            text = self._generate(prompt, max_tokens=800)
-            return self._parse_analysis_response(text)
+            text = self._call(prompt, 800)
+            return self._parse(text)
         except Exception as e:
-            logger.error(f"Comprehensive analysis error: {e}")
+            logger.error(f"Analysis error: {e}")
             return {
                 "analysis": f"Analysis unavailable: {e}",
                 "recommendations": "Please consult a healthcare professional.",
@@ -129,58 +117,33 @@ class OpenAIHealthcareAssistant:
             }
 
     def get_health_recommendation(self, context: str) -> str:
-        """Answer a follow-up health question."""
         if self.mock_mode:
             return "Demo mode — add GEMINI_API_KEY secret in HF Space settings."
         try:
-            prompt = f"{SYSTEM_DISCLAIMER}\n\nPatient question: {context}"
-            return self._generate(prompt, max_tokens=300)
+            return self._call(f"{DISCLAIMER}\n\nPatient question: {context}", 300)
         except Exception as e:
-            logger.error(f"Health recommendation error: {e}")
+            logger.error(f"Recommendation error: {e}")
             return f"Unable to process your question: {e}"
 
-    def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
-        try:
-            lines = response_text.split("\n")
-            analysis_lines, recommendation_lines = [], []
-            current = "analysis"
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                if any(k in line.lower() for k in ["recommendation", "advice", "should", "consider"]):
-                    current = "recommendations"
-                (analysis_lines if current == "analysis" else recommendation_lines).append(line)
-            confidence = min(0.9, max(0.3, len(response_text) / 1000))
-            return {
-                "analysis": "\n".join(analysis_lines[:10]),
-                "recommendations": "\n".join(recommendation_lines[:8]),
-                "confidence": confidence,
-            }
-        except Exception:
-            return {
-                "analysis": response_text[:500],
-                "recommendations": "Please consult with healthcare professionals.",
-                "confidence": 0.6,
-            }
+    def _parse(self, text: str) -> Dict[str, Any]:
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        mid = max(1, len(lines) // 2)
+        return {
+            "analysis": "\n".join(lines[:mid]),
+            "recommendations": "\n".join(lines[mid:]),
+            "confidence": min(0.9, max(0.3, len(text) / 1000)),
+        }
 
-    def _mock_image_analysis(self, symptoms: str) -> str:
-        return f"Mock Image Analysis for: '{symptoms[:50]}...'\nAdd GEMINI_API_KEY to enable real analysis."
-
-    def _mock_audio_analysis(self, symptoms: str) -> str:
-        return f"Mock Audio Analysis for: '{symptoms[:50]}...'\nAdd GEMINI_API_KEY to enable real analysis."
-
-    def _mock_comprehensive_analysis(self, symptoms: str, age: int, gender: str) -> Dict[str, Any]:
+    def _mock_analysis(self, symptoms: str, age: int, gender: str) -> Dict[str, Any]:
         return {
             "analysis": (
-                f"Demo Mode — Patient: {age}-year-old {gender}\n"
+                f"Demo Mode — {age}-year-old {gender}\n"
                 f"Symptoms: {symptoms[:100]}\n\n"
                 "Add GEMINI_API_KEY secret in HF Space settings for real AI analysis."
             ),
             "recommendations": (
-                "General Recommendations (Demo):\n"
-                "• Schedule consultation with appropriate healthcare provider\n"
-                "• Monitor symptom progression\n"
+                "• Schedule consultation with a healthcare provider\n"
+                "• Monitor symptoms\n"
                 "• Seek immediate care if symptoms worsen"
             ),
             "confidence": 0.0,
