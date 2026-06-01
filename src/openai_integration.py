@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta"
-    "/models/gemini-2.0-flash:generateContent"
+    "/models/gemini-1.5-flash:generateContent"
 )
 
 DISCLAIMER = (
@@ -20,6 +20,15 @@ DISCLAIMER = (
     "You do not provide medical diagnoses. "
     "Always recommend professional medical consultation."
 )
+
+
+def _sanitize_error(e: Exception) -> str:
+    """Return a safe error string with no API key or URL."""
+    msg = str(e)
+    # Strip anything that looks like a URL containing a key= param
+    import re
+    msg = re.sub(r"https?://[^\s]*key=[^\s]*", "<Gemini API>", msg)
+    return msg
 
 
 def _call_gemini(prompt: str, api_key: str, max_tokens: int = 800) -> str:
@@ -68,7 +77,7 @@ class OpenAIHealthcareAssistant:
             return self._call(prompt, 500)
         except Exception as e:
             logger.error(f"Image analysis error: {e}")
-            return f"Image analysis unavailable: {e}"
+            return f"Image analysis unavailable: {_sanitize_error(e)}"
 
     def analyze_audio_symptoms(self, audio_path: str, symptoms: str) -> str:
         return "Audio recorded. Include any additional details in your symptom description."
@@ -111,7 +120,7 @@ class OpenAIHealthcareAssistant:
         except Exception as e:
             logger.error(f"Analysis error: {e}")
             return {
-                "analysis": f"Analysis unavailable: {e}",
+                "analysis": f"Analysis unavailable: {_sanitize_error(e)}",
                 "recommendations": "Please consult a healthcare professional.",
                 "confidence": 0.0,
             }
@@ -123,7 +132,7 @@ class OpenAIHealthcareAssistant:
             return self._call(f"{DISCLAIMER}\n\nPatient question: {context}", 300)
         except Exception as e:
             logger.error(f"Recommendation error: {e}")
-            return f"Unable to process your question: {e}"
+            return f"Unable to process your question: {_sanitize_error(e)}"
 
     def _parse(self, text: str) -> Dict[str, Any]:
         lines = [l.strip() for l in text.split("\n") if l.strip()]

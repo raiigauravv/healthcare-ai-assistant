@@ -385,7 +385,7 @@ class AgentCoordinator:
             )
             resp = requests.post(
                 "https://generativelanguage.googleapis.com/v1beta"
-                f"/models/gemini-2.0-flash:generateContent?key={self._api_key}",
+                f"/models/gemini-1.5-flash:generateContent?key={self._api_key}",
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"maxOutputTokens": 600, "temperature": 0.4},
@@ -402,9 +402,11 @@ class AgentCoordinator:
                 "confidence_score": 0.82,
             }
         except Exception as e:
+            import re
+            safe_err = re.sub(r"https?://[^\s]*key=[^\s]*", "<Gemini API>", str(e))
             logger.error(f"{name} agent error: {e}")
             return {
-                "analysis": f"Error during {name} analysis: {e}",
+                "analysis": f"Error during {name} analysis: {safe_err}",
                 "recommendations": "Please consult a healthcare professional.",
                 "confidence_score": 0.0,
             }
