@@ -63,10 +63,10 @@ def predict_health_issue(text_symptoms: str, patient_age: int, patient_gender: s
     try:
         if API_KEY_MISSING:
             return (
-                "❌ **Configuration Error**: GEMINI_API_KEY not found. Please add it as a secret in HF Space settings in the environment variables.",
-                "❌ **Configuration Error**: GEMINI_API_KEY not found. Please add it as a secret in HF Space settings in the environment variables.",
-                "❌ **Configuration Error**: GEMINI_API_KEY not found. Please add it as a secret in HF Space settings in the environment variables.",
-                "❌ **Configuration Error**: GEMINI_API_KEY not found. Please add it as a secret in HF Space settings in the environment variables.",
+                "❌ **Configuration Error**: OPENAI_API_KEY not found. Please add it as a secret in HF Space settings.",
+                "❌ **Configuration Error**: OPENAI_API_KEY not found. Please add it as a secret in HF Space settings.",
+                "❌ **Configuration Error**: OPENAI_API_KEY not found. Please add it as a secret in HF Space settings.",
+                "❌ **Configuration Error**: OPENAI_API_KEY not found. Please add it as a secret in HF Space settings.",
                 ""
             )
         
@@ -179,49 +179,73 @@ This AI analysis is for informational purposes only and should not replace profe
 """
             
             logger.info(f"Successfully completed analysis for {patient_name}")
-            return gp_result, cardio_result, neuro_result, derma_result, summary
-            
+            return gp_result, cardio_result, neuro_result, derma_result, summary, summary
+
         except Exception as e:
             error_msg = f"❌ **AI Analysis Error**: {str(e)}"
             logger.error(f"Agent analysis failed: {e}")
-            return error_msg, error_msg, error_msg, error_msg, error_msg
-            
+            return error_msg, error_msg, error_msg, error_msg, error_msg, ""
+
     except Exception as e:
         error_msg = f"❌ **System Error**: {str(e)}"
         logger.error(f"Prediction failed: {e}")
-        return error_msg, error_msg, error_msg, error_msg, error_msg
+        return error_msg, error_msg, error_msg, error_msg, error_msg, ""
 
-def process_followup_question(question: str, chat_history: List, patient_name: str = "Patient"):
+def process_followup_question(question: str, chat_history: List, patient_name: str = "Patient", analysis_context: str = ""):
     """
-    Enhanced chatbot function for follow-up questions with conversation history
+    Chatbot function — uses the previous specialist analysis as context so answers are specific.
     """
     try:
         if API_KEY_MISSING:
-            error_response = "❌ **Configuration Error**: GEMINI_API_KEY not found. Please add it as a secret in HF Space settings to use the chatbot feature."
+            error_response = "❌ **Configuration Error**: OPENAI_API_KEY not found. Please add it as a secret in HF Space settings."
             chat_history.append([question, error_response])
             return "", chat_history
-        
+
         if not question or len(question.strip()) < 3:
-            error_response = "❌ **Input Error**: Please ask a more detailed question (at least 3 characters)"
+            error_response = "❌ **Input Error**: Please ask a more detailed question."
             chat_history.append([question, error_response])
             return "", chat_history
-        
-        # Use healthcare AI for follow-up
+
         try:
-            context = f"Previous conversation context available. Current follow-up question from {patient_name}: {question}"
-            response = healthcare_ai.get_health_recommendation(context)
-            
-            # Format the response for better readability
-            formatted_response = f"**Healthcare AI Assistant:** {response}\n\n*This is a follow-up response. For comprehensive analysis, please use the main analysis feature above.*"
-            
+            # Build context from previous analysis + conversation history
+            context_parts = []
+
+            if analysis_context and len(analysis_context.strip()) > 50:
+                context_parts.append(
+                    f"The following specialist analysis was already performed for this patient:\n\n"
+                    f"{analysis_context}\n\n"
+                    f"---\n"
+                    f"Answer the patient's follow-up question specifically based on the above analysis."
+                )
+            else:
+                context_parts.append(
+                    "You are a healthcare AI assistant. No prior analysis has been run yet — "
+                    "answer general health questions while recommending professional consultation."
+                )
+
+            # Include last few chat turns for conversational continuity
+            if chat_history:
+                recent = chat_history[-3:]  # last 3 exchanges
+                history_text = "\n".join(
+                    f"Patient: {h[0]}\nAssistant: {h[1]}" for h in recent if h[0] and h[1]
+                )
+                if history_text:
+                    context_parts.append(f"Recent conversation:\n{history_text}")
+
+            context_parts.append(f"Patient ({patient_name}) follow-up question: {question}")
+            full_context = "\n\n".join(context_parts)
+
+            response = healthcare_ai.get_health_recommendation(full_context)
+            formatted_response = f"**Healthcare AI Assistant:** {response}"
             chat_history.append([question, formatted_response])
             return "", chat_history
-            
+
         except Exception as e:
-            error_response = f"❌ **AI Error**: Unable to process your question. Please try again. Error: {str(e)}"
+            error_response = f"❌ **AI Error**: Unable to process your question. Please try again."
+            logger.error(f"Chatbot error: {e}")
             chat_history.append([question, error_response])
             return "", chat_history
-            
+
     except Exception as e:
         error_response = f"❌ **System Error**: {str(e)}"
         chat_history.append([question, error_response])
@@ -411,6 +435,9 @@ def create_premium_interface():
                             height=300
                         )
         
+        # Hidden state to carry analysis results into the chatbot
+        analysis_state = gr.State("")
+
         # Enhanced Chatbot Section
         gr.Markdown("## 💬 AI Health Assistant Chatbot")
         gr.Markdown("*Ask follow-up questions about your health analysis or get additional medical information*")
@@ -469,19 +496,19 @@ def create_premium_interface():
         analyze_btn.click(
             fn=predict_health_issue,
             inputs=[text_symptoms, patient_age, patient_gender, patient_name, medical_image, audio_file],
-            outputs=[gp_output, cardio_output, neuro_output, derma_output, summary_output]
+            outputs=[gp_output, cardio_output, neuro_output, derma_output, summary_output, analysis_state]
         )
-        
-        # Enhanced chatbot interaction
+
+        # Chatbot interaction — passes analysis context so responses are specific
         ask_btn.click(
             fn=process_followup_question,
-            inputs=[question_input, chatbot, patient_name],
+            inputs=[question_input, chatbot, patient_name, analysis_state],
             outputs=[question_input, chatbot]
         )
-        
+
         question_input.submit(
             fn=process_followup_question,
-            inputs=[question_input, chatbot, patient_name],
+            inputs=[question_input, chatbot, patient_name, analysis_state],
             outputs=[question_input, chatbot]
         )
         
