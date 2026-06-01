@@ -2,7 +2,7 @@
 title: Healthcare AI Assistant
 emoji: 🏥
 colorFrom: blue
-colorTo: cyan
+colorTo: green
 sdk: docker
 pinned: false
 license: mit
