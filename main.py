@@ -64,6 +64,52 @@ class ChatRequest(BaseModel):
 
 # ── API routes ───────────────────────────────────────────────────────────────
 
+@app.post("/api/test-vision")
+async def test_vision(image: UploadFile = File(...)):
+    """
+    Diagnostic endpoint — upload any image and get a raw GPT-4o Vision response.
+    Bypasses all preprocessing so we can isolate exactly where Vision breaks.
+    """
+    if not READY or healthcare_ai.mock_mode:
+        raise HTTPException(503, "OpenAI API key not configured")
+    try:
+        raw = await image.read()
+        if not raw:
+            return {"error": "0 bytes received — upload failed"}
+
+        pil = Image.open(io.BytesIO(raw)).convert("RGB")
+        buf = io.BytesIO()
+        pil.save(buf, format="JPEG", quality=85)
+        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        logger.info(f"test-vision: {pil.size}px  orig={len(raw)//1024}KB  b64={len(img_b64)//1024}KB")
+
+        resp = healthcare_ai.client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe exactly what you see in this image in 2-3 sentences."},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/jpeg;base64,{img_b64}",
+                        "detail": "low",   # cheap/fast for a test
+                    }},
+                ],
+            }],
+            max_tokens=200,
+        )
+        return {
+            "ok": True,
+            "image_size": list(pil.size),
+            "original_kb": len(raw) // 1024,
+            "b64_kb": len(img_b64) // 1024,
+            "gpt4o_says": resp.choices[0].message.content,
+        }
+    except Exception as exc:
+        logger.error(f"test-vision error: {exc}", exc_info=True)
+        return {"error": str(exc)}
+
+
 @app.get("/api/health")
 async def health():
     return {
